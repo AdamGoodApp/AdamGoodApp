@@ -9,14 +9,14 @@ import {
 } from "three";
 
 const OFFSET = new Vector3(400, 400, 400);
-const FIT_BOX = new Box3(new Vector3(-88, 0, -88), new Vector3(88, 62, 88));
+const FIT_BOX = new Box3(new Vector3(-88, 0, -88), new Vector3(88, 14, 88));
 const RIGHT = new Vector3(1, 0, -1).normalize();
 /** Ground direction that moves up the screen; √3 undoes the 35.26° tilt. */
 const UP_ON_GROUND = new Vector3(-1, 0, -1)
 	.normalize()
 	.multiplyScalar(Math.sqrt(3));
 const GROUND = new Plane(new Vector3(0, 1, 0), 0);
-const PAN_LIMIT = 80;
+const PAN_LIMIT = 120;
 
 export type CameraMode = "fixed" | "pannable";
 

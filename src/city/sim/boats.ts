@@ -10,11 +10,25 @@ const ROLL = (4 * Math.PI) / 180;
 const SAIL_TINTS = [0xffffff, 0xffd6a5, 0xcfe8ff] as const;
 const BOATS_PER_ORBIT = 2;
 
-/** Sail loops stay in the water band west and south of the island (land is |x|,|z| < 92). */
-const ORBITS = [
-	{ cx: -125, cz: 20, rx: 12, rz: 35, speed: 2.8 },
-	{ cx: -120, cz: 125, rx: 20, rz: 14, speed: 3.4 },
-	{ cx: 20, cz: 125, rx: 45, rz: 12, speed: 3.1 },
+/**
+ * Sail loops (ellipses, counter-clockwise on the map). The sea is x < -90 & z > 25 plus
+ * z > 90 & x < -25; every loop keeps >= 6 m from the coast lines (z = 25, x = -90, z = 90, quay x = -25),
+ * >= 6 m from the pier (z 68..72, x -119..-91) and the lighthouse islet (-124, 70), >= 6 m from the
+ * ferry loop (x -140..-104, z 77.5..104), >= 6 m from the west marina jetty and yachts
+ * (x -186.5..-167.5, z 25..60.2) and >= 8 m from the south marina jetties (x >= -46).
+ * Checked by boats.test.ts.
+ */
+export const ORBITS = [
+	// West bay north of the pier, east of the west marina.
+	{ cx: -135, cz: 46, rx: 22, rz: 10, speed: 2.8 },
+	// Far west, beyond the west marina.
+	{ cx: -206, cz: 50, rx: 8, rz: 14, speed: 2.4 },
+	// West of the ferry loop.
+	{ cx: -172, cz: 88, rx: 22, rz: 14, speed: 3.4 },
+	// South bay in front of the beach.
+	{ cx: -80, cz: 135, rx: 22, rz: 18, speed: 3.1 },
+	// South bay off the marina (jetties end at x = -46).
+	{ cx: -70, cz: 185, rx: 12, rz: 20, speed: 2.9 },
 ] as const;
 
 const FERRY_SPEED = 4;

@@ -3,6 +3,7 @@ import { MAT_STATIC, merge } from "../geometry";
 import { facadeMaterial } from "../kit/facade";
 import type { Rng } from "../rng";
 import type { Agent } from "../sim/agent";
+import { createOutskirtTraffic } from "../sim/outskirt-traffic";
 import { createPeople } from "../sim/people";
 import { createSkyTraffic } from "../sim/sky";
 import { createTraffic } from "../sim/traffic";
@@ -16,6 +17,10 @@ import { buildGround } from "./ground";
 import { buildHospital } from "./hospital";
 import { buildMountains } from "./mountains";
 import { buildOcean } from "./ocean";
+import { buildOutskirtsNorth } from "./out-north";
+import { buildOutskirtsSouth } from "./out-south";
+import { buildOutskirtsEast, buildOutskirtsWest } from "./out-urban";
+import { buildOutskirts } from "./outskirts";
 import { buildPark } from "./park";
 import { buildResidential } from "./residential";
 import { buildRoads } from "./roads";
@@ -43,6 +48,11 @@ export function buildWorld(rng: Rng, density: number): BuiltWorld {
 		parkLoop: null,
 	};
 
+	buildOutskirts(ctx);
+	buildOutskirtsWest(ctx);
+	buildOutskirtsNorth(ctx);
+	buildOutskirtsEast(ctx);
+	buildOutskirtsSouth(ctx);
 	buildGround(ctx);
 	buildRoads(ctx);
 	buildDowntown(ctx);
@@ -62,6 +72,7 @@ export function buildWorld(rng: Rng, density: number): BuiltWorld {
 	createTraffic(ctx);
 	createPeople(ctx);
 	createSkyTraffic(ctx);
+	createOutskirtTraffic(ctx);
 
 	const staticMesh = new Mesh(merge(ctx.statics), MAT_STATIC);
 	staticMesh.castShadow = true;

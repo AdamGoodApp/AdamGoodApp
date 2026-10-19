@@ -128,56 +128,120 @@ class BeaconAgent implements Agent {
 	}
 }
 
+/** Edges of the western strip: the sea starts at z = 25 for x < -90 and at x = -25 for z > 90. */
+const COAST_Z = 25;
+const COAST_X = -25;
+const WORLD_EDGE = 250;
+const QUAY_W = 1.6;
+const QUAY_FACE = COAST_X - QUAY_W;
+const QUAY_STONE = 0xa9a69f;
+
+/** Deterministic 0..1 noise so the shore never consumes the shared rng stream. */
+function hash01(i: number): number {
+	const v = Math.sin(i * 12.9898 + 78.233) * 43758.5453;
+	return v - Math.floor(v);
+}
+
+/**
+ * The real coast, in four pieces (land is everywhere else):
+ *  1. x = -90, z 25..90: sand ramp + foam (the beach's west edge).
+ *  2. z = 90, x -90..-25: sand ramp + foam (beach and theme-park south edge).
+ *  3. z = 25, x -250..-90: rock revetment + boulders + foam below the west outskirts.
+ *  4. x = -25, z 90..250: vertical stone quay wall + foam for the marina.
+ * Pieces 1/3 meet in a mitre at (-90, 25); pieces 2/4 meet at (-25, 90) where the quay starts.
+ */
 function buildShore(ctx: BuildContext): void {
 	const s = ctx.statics;
 	const edge = LAND_HALF;
 	const far = edge + SHORE_LEN;
 	const foamY = (d: number): number => -(SHORE_DROP / SHORE_LEN) * d + 0.015;
 
-	// Sand ramps along the beach's west edge and the whole south edge, mitred at the corner.
 	s.push(
+		// 1. West beach ramp, z 25..90; its north end is cut on the diagonal shared with the revetment.
 		slope(
 			SAND,
-			[-edge, 0, 33],
-			[-far, -SHORE_DROP, 33],
+			[-edge, 0, COAST_Z],
+			[-far, -SHORE_DROP, COAST_Z + SHORE_LEN],
 			[-far, -SHORE_DROP, far],
 			[-edge, 0, edge],
 		),
+		// 2. South beach ramp, x -90..-25, mitred with the west ramp at (-90, 90).
 		slope(
 			SAND,
 			[-edge, 0, edge],
-			[edge, 0, edge],
-			[edge, -SHORE_DROP, far],
+			[COAST_X, 0, edge],
+			[COAST_X, -SHORE_DROP, far],
 			[-far, -SHORE_DROP, far],
 		),
+		// 3. Revetment under the west outskirts, same slope as the sand so the corner is an exact 45° mitre.
+		slope(
+			ROCK,
+			[-WORLD_EDGE, 0, COAST_Z],
+			[-edge, 0, COAST_Z],
+			[-far, -SHORE_DROP, COAST_Z + SHORE_LEN],
+			[-WORLD_EDGE, -SHORE_DROP, COAST_Z + SHORE_LEN],
+		),
+		// Foam: west beach (north end on the mitre) ...
 		slope(
 			FOAM,
-			[-edge - FOAM_NEAR, foamY(FOAM_NEAR), 33],
-			[-edge - FOAM_FAR, foamY(FOAM_FAR), 33],
+			[-edge - FOAM_NEAR, foamY(FOAM_NEAR), COAST_Z + FOAM_NEAR],
+			[-edge - FOAM_FAR, foamY(FOAM_FAR), COAST_Z + FOAM_FAR],
 			[-edge - FOAM_FAR, foamY(FOAM_FAR), edge + FOAM_FAR],
 			[-edge - FOAM_NEAR, foamY(FOAM_NEAR), edge + FOAM_NEAR],
 		),
+		// ... south beach, stopping where the quay foam begins ...
 		slope(
 			FOAM,
 			[-edge - FOAM_NEAR, foamY(FOAM_NEAR), edge + FOAM_NEAR],
-			[edge, foamY(FOAM_NEAR), edge + FOAM_NEAR],
-			[edge, foamY(FOAM_FAR), edge + FOAM_FAR],
+			[QUAY_FACE - 1.4, foamY(FOAM_NEAR), edge + FOAM_NEAR],
+			[QUAY_FACE - 1.4, foamY(FOAM_FAR), edge + FOAM_FAR],
 			[-edge - FOAM_FAR, foamY(FOAM_FAR), edge + FOAM_FAR],
+		),
+		// ... and the revetment (west end of its band is the mitre).
+		slope(
+			FOAM,
+			[-WORLD_EDGE, foamY(FOAM_NEAR), COAST_Z + FOAM_NEAR],
+			[-edge - FOAM_NEAR, foamY(FOAM_NEAR), COAST_Z + FOAM_NEAR],
+			[-edge - FOAM_FAR, foamY(FOAM_FAR), COAST_Z + FOAM_FAR],
+			[-WORLD_EDGE, foamY(FOAM_FAR), COAST_Z + FOAM_FAR],
 		),
 	);
 
-	// Rocky two-step bank on the other edges so the island stands in the sea.
-	const step = darken(ROCK, 0.85);
-	const reach = edge + 1.5;
-	const westLen = reach + 33;
-	const westMid = (-reach + 33) / 2;
+	// Boulders along the revetment (flattened low-poly rocks half sunk in the slope).
+	const shades = [ROCK, darken(ROCK, 0.85), darken(ROCK, 1.08)];
+	for (
+		let i = 0, x = -WORLD_EDGE + 3;
+		x < -edge - 4;
+		i++, x += 3.5 + hash01(i) * 2
+	) {
+		const d = 0.8 + hash01(i * 3 + 1) * 4.2;
+		const r = 0.5 + hash01(i * 5 + 2) * 0.7;
+		s.push(
+			place(paint(new IcosahedronGeometry(r, 0), shades[i % 3] as number), {
+				x,
+				y: -(SHORE_DROP / SHORE_LEN) * d + r * 0.2,
+				z: COAST_Z + d,
+				ry: hash01(i * 7 + 3) * Math.PI,
+				sy: 0.6,
+			}),
+		);
+	}
+
+	// 4. Quay wall: the land slab's west face is hidden behind a stone wall with a lighter plinth line.
+	const len = WORLD_EDGE - edge;
+	const mid = (edge + WORLD_EDGE) / 2;
 	s.push(
-		box(2 * reach, 0.8, 1.5, ROCK, 0, -0.8, -edge - 0.75),
-		box(2 * reach + 2, 0.5, 1, step, 0, -0.6, -edge - 2),
-		box(1.5, 0.8, 2 * reach, ROCK, edge + 0.75, -0.8, 0),
-		box(1, 0.5, 2 * reach + 2, step, edge + 2, -0.6, 0),
-		box(1.5, 0.8, westLen, ROCK, -edge - 0.75, -0.8, westMid),
-		box(1, 0.5, westLen + 1, step, -edge - 2, -0.6, westMid - 0.5),
+		box(QUAY_W, 1.65, len, QUAY_STONE, COAST_X - QUAY_W / 2, -1.4, mid),
+		box(0.12, 0.3, len, darken(QUAY_STONE, 0.8), QUAY_FACE - 0.05, -0.55, mid),
+		box(
+			1.4,
+			0.02,
+			len - FOAM_NEAR,
+			FOAM,
+			QUAY_FACE - 0.7,
+			-0.31,
+			(edge + FOAM_NEAR + WORLD_EDGE) / 2,
+		),
 	);
 }
 

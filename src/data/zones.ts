@@ -19,8 +19,10 @@ export interface ZoneDef {
 	district: string;
 	topic: string;
 	rect: ZoneRect;
-	/** World-space point the zone card points at (top of the district). */
+	/** World-space point the zone card points at; must stay on screen. */
 	anchor: [number, number, number];
+	/** Height of the district's picking volume; defaults to the anchor height. */
+	top?: number;
 }
 
 /**
@@ -34,7 +36,8 @@ export const ZONES: readonly ZoneDef[] = [
 		district: "Downtown",
 		topic: "Experience",
 		rect: { minX: -84, maxX: -33, minZ: -84, maxZ: -33 },
-		anchor: [-58, 58, -58],
+		anchor: [-58, 18, -58],
+		top: 72,
 	},
 	{
 		id: "mountains",

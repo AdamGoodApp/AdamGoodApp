@@ -75,13 +75,14 @@ export class CityWorld {
 		sun.position.set(-60, 110, 70);
 		sun.castShadow = true;
 		const sc = sun.shadow.camera;
-		sc.left = -130;
-		sc.right = 130;
-		sc.top = 130;
-		sc.bottom = -130;
+		// Covers the whole visible city including the outskirts.
+		sc.left = -210;
+		sc.right = 210;
+		sc.top = 210;
+		sc.bottom = -210;
 		sc.near = 1;
 		sc.far = 400;
-		const mapSize = o.density < 1 ? 1024 : 2048;
+		const mapSize = o.density < 1 ? 2048 : 4096;
 		sun.shadow.mapSize.set(mapSize, mapSize);
 		sun.shadow.bias = -0.0004;
 		sun.shadow.normalBias = 0.03;

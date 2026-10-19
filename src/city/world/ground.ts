@@ -1,7 +1,7 @@
 import { box } from "../geometry";
-import { APRON, CONCRETE, GRASS, PARK, PAVEMENT, ROCK, SAND } from "../palette";
+import { APRON, CONCRETE, GRASS, PARK, PAVEMENT, SAND } from "../palette";
 import type { BuildContext } from "./context";
-import { CELL_Y, LAND_HALF } from "./layout";
+import { CELL_Y } from "./layout";
 
 /** Cell slabs keyed by centre; each cell is 51 m (outer) or 54 m (centre) wide. */
 const CELLS: { x: [number, number]; z: [number, number]; color: number }[] = [
@@ -17,7 +17,6 @@ const CELLS: { x: [number, number]; z: [number, number]; color: number }[] = [
 ];
 
 export function buildGround(ctx: BuildContext): void {
-	ctx.statics.push(box(LAND_HALF * 2, 2, LAND_HALF * 2, GRASS, 0, -2, 0));
 	for (const c of CELLS) {
 		const w = c.x[1] - c.x[0];
 		const d = c.z[1] - c.z[0];
@@ -33,6 +32,4 @@ export function buildGround(ctx: BuildContext): void {
 			),
 		);
 	}
-	// Skirt below the land so the edge reads as a thick slab against the water.
-	ctx.statics.push(box(LAND_HALF * 2, 0.01, LAND_HALF * 2, ROCK, 0, -2.01, 0));
 }

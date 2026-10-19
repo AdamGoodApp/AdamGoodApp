@@ -13,8 +13,21 @@ export const SIDEWALK_Y = 0.18;
 export const CELL_Y = 0.1;
 /** Lane offset from a road centreline (right-hand traffic). */
 export const LANE_OFFSET = 1.5;
-/** The ocean is a square of this half-size around the island (land is ±LAND_HALF). */
-export const OCEAN_HALF = 150;
+/** The city extends to ±WORLD_HALF beyond the district grid (outskirts fill the screen). */
+export const WORLD_HALF = 250;
+/**
+ * The only sea is south-west of the beach: west of the island edge (x < −LAND_HALF)
+ * south of COAST_WEST_Z, and south of the island edge (z > LAND_HALF) west of
+ * COAST_SOUTH_X. Everything else is land.
+ */
+export const COAST_WEST_Z = 25;
+export const COAST_SOUTH_X = -25;
+
+export function isSea(x: number, z: number): boolean {
+	return (
+		(x < -LAND_HALF && z > COAST_WEST_Z) || (z > LAND_HALF && x < COAST_SOUTH_X)
+	);
+}
 /** Mean water level (the land top is y = 0). */
 export const WATER_Y = -0.35;
 /** Tram loop half-size around the park (inside the avenue sidewalks at ±25.5). */

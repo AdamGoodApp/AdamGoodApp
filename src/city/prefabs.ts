@@ -457,3 +457,15 @@ export function helicopterRotor(): BufferGeometry {
 		cyl(0.3, 0.3, 0.22, 8, 0x555555, 0, -0.08, 0),
 	]);
 }
+
+/** Articulated lorry: blue cab, WHITE (tintable) box trailer; length along Z, ~9 m. */
+export function truck(): BufferGeometry {
+	return merge([
+		box(2.0, 0.35, 8.6, DARK, 0, 0.45, 0.1),
+		box(2.4, 2.0, 2.2, 0x31507a, 0, 0.7, 3.3),
+		box(2.2, 0.7, 0.1, GLASS, 0, 1.75, 4.42),
+		box(2.5, 2.7, 6.6, WHITE, 0, 0.8, -1.0),
+		...lights(1.1, 4.42, -4.32, 0.9),
+		...wheels([-1.05, 1.05], [-3.4, -2.2, 2.9], 0.5),
+	]);
+}

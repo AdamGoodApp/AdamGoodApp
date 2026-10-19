@@ -2,15 +2,13 @@ import { Mesh, PlaneGeometry } from "three";
 import { color, mix, positionLocal, sin, vec3 } from "three/tsl";
 import { MeshStandardNodeMaterial } from "three/webgpu";
 import { simClock as time } from "../env";
-import { box } from "../geometry";
-import { darken, WATER_DEEP, WATER_LIGHT } from "../palette";
+import { WATER_DEEP, WATER_LIGHT } from "../palette";
 import type { BuildContext } from "./context";
-import { OCEAN_HALF, WATER_Y } from "./layout";
+import { COAST_SOUTH_X, COAST_WEST_Z, WATER_Y } from "./layout";
 
-/** Walls reach a hair above the mean water line so the sea reads as a thick tile. */
-const WALL_TOP = WATER_Y + 0.15;
-const WALL_DEPTH = 3.4;
-const WALL_THICKNESS = 0.6;
+const SEA_SIZE = 360;
+const SEA_CENTRE_X = COAST_SOUTH_X + 20 - SEA_SIZE / 2;
+const SEA_CENTRE_Z = COAST_WEST_Z - 20 + SEA_SIZE / 2;
 
 export function buildOcean(ctx: BuildContext): void {
 	// The plane is rotated flat on the mesh, so plane-local z is world up.
@@ -35,23 +33,14 @@ export function buildOcean(ctx: BuildContext): void {
 		shimmer.mul(0.3),
 	);
 
+	// The sea only lies south-west of the beach; the plane runs under the
+	// neighbouring land slabs, which hide its overlap.
 	const ocean = new Mesh(
-		new PlaneGeometry(OCEAN_HALF * 2, OCEAN_HALF * 2, 128, 128),
+		new PlaneGeometry(SEA_SIZE, SEA_SIZE, 128, 128),
 		material,
 	);
 	ocean.rotation.x = -Math.PI / 2;
-	ocean.position.y = WATER_Y;
+	ocean.position.set(SEA_CENTRE_X, WATER_Y, SEA_CENTRE_Z);
 	ocean.receiveShadow = true;
 	ctx.group.add(ocean);
-
-	const wall = darken(WATER_DEEP, 0.6);
-	const base = WALL_TOP - WALL_DEPTH;
-	const span = OCEAN_HALF * 2 + WALL_THICKNESS * 2;
-	const centre = OCEAN_HALF + WALL_THICKNESS / 2;
-	for (const side of [-1, 1]) {
-		ctx.statics.push(
-			box(span, WALL_DEPTH, WALL_THICKNESS, wall, 0, base, side * centre),
-			box(WALL_THICKNESS, WALL_DEPTH, span, wall, side * centre, base, 0),
-		);
-	}
 }
