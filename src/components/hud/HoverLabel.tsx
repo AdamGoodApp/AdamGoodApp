@@ -15,8 +15,8 @@ export function HoverLabel() {
 		text = `${zone.district.toUpperCase()} · ${zone.topic.toUpperCase()}`;
 	} else if (ready && !interacted) {
 		text = isDesktop
-			? "HOVER A DISTRICT — CLICK TO READ"
-			: "DRAG TO EXPLORE — TAP A DISTRICT";
+			? "CLICK A LIGHT BULB TO EXPLORE"
+			: "DRAG TO EXPLORE — TAP A LIGHT BULB";
 	}
 
 	return (

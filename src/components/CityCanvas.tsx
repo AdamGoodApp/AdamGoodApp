@@ -13,6 +13,8 @@ import { setUi, uiStore } from "#/store/ui";
 
 /** Give slow software rasterisers time to compile pipelines before giving up. */
 const WATCHDOG_MS = 15_000;
+/** Automated tests render on a CPU rasteriser; only a real hang should trip the fallback there. */
+const WATCHDOG_TEST_MS = 90_000;
 
 function Canvas({ worldRef }: { worldRef: RefObject<CityWorld | null> }) {
 	const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -30,9 +32,14 @@ function Canvas({ worldRef }: { worldRef: RefObject<CityWorld | null> }) {
 			setUi({ tier: "fallback" });
 		};
 
-		const watchdog = window.setTimeout(() => {
-			if (!uiStore.state.ready) fail(new Error("no frame within 15 s"));
-		}, WATCHDOG_MS);
+		const lite = readParam("e2e") === "1";
+		const watchdog = window.setTimeout(
+			() => {
+				if (!uiStore.state.ready)
+					fail(new Error("no first frame before the watchdog"));
+			},
+			lite ? WATCHDOG_TEST_MS : WATCHDOG_MS,
+		);
 
 		const desktopMq = matchMedia(DESKTOP_QUERY);
 		const motionMq = matchMedia("(prefers-reduced-motion: reduce)");
@@ -57,7 +64,7 @@ function Canvas({ worldRef }: { worldRef: RefObject<CityWorld | null> }) {
 				tier,
 				mode: isDesktop ? "fixed" : "pannable",
 				density: isDesktop ? 1 : 0.5,
-				lite: readParam("e2e") === "1",
+				lite,
 				reducedMotion: prefersReducedMotion(),
 				timeMode: uiStore.state.timeMode,
 				onHover: (hovered) =>
@@ -65,6 +72,8 @@ function Canvas({ worldRef }: { worldRef: RefObject<CityWorld | null> }) {
 				onSelect: (selected) => setUi({ selected, interacted: true }),
 				onReady: () => setUi({ ready: true }),
 				onNightChange: (isNight) => setUi({ isNight }),
+				onViewChange: () =>
+					setUi({ viewVersion: uiStore.state.viewVersion + 1 }),
 				onFatal: fail,
 			});
 			if (cancelled) {

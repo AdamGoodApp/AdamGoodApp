@@ -9,8 +9,8 @@ const gpuArgs = [
 export default defineConfig({
 	testDir: "e2e",
 	fullyParallel: true,
-	// SwiftShader is CPU-bound: more workers only slow every first frame down.
-	workers: 2,
+	// SwiftShader is CPU-bound: parallel workers only slow every first frame down.
+	workers: 1,
 	forbidOnly: !!process.env.CI,
 	retries: process.env.CI ? 2 : 0,
 	reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",

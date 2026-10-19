@@ -1,12 +1,13 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
-import { openCity, zonePoint } from "./helpers";
+import { expect, openCity, test, zonePoint } from "./helpers";
 
 test.skip(({ isMobile }) => isMobile, "desktop interactions");
 
 test("hovering and clicking a district opens its card", async ({ page }) => {
 	await openCity(page);
-	await expect(page.getByTestId("tier-badge")).toHaveText(/WEBGPU|WEBGL2/);
+	expect(await page.evaluate(() => window.__city?.tier)).toMatch(
+		/^(webgpu|webgl2)$/,
+	);
 
 	const p = await zonePoint(page, "downtown");
 	await page.mouse.move(p.x, p.y);
@@ -34,7 +35,21 @@ test("hovering and clicking a district opens its card", async ({ page }) => {
 	await expect(dialog).toBeHidden();
 });
 
-test("keyboard users reach every district from the district menu", async ({
+test("every district has a floating light bulb that opens it", async ({
+	page,
+}) => {
+	await openCity(page);
+	const bulbs = page
+		.getByRole("navigation", { name: "Districts" })
+		.getByRole("button");
+	await expect(bulbs).toHaveCount(7);
+	await page.getByTestId("bulb-commercial").click();
+	await expect(
+		page.getByRole("dialog").getByRole("heading", { name: "Technical skills" }),
+	).toBeVisible();
+});
+
+test("keyboard users reach every district through the light bulbs", async ({
 	page,
 }) => {
 	await openCity(page);

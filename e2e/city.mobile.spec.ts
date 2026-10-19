@@ -1,5 +1,4 @@
-import { expect, test } from "@playwright/test";
-import { openCity, zonePoint } from "./helpers";
+import { expect, openCity, test, zonePoint } from "./helpers";
 
 test.skip(({ isMobile }) => !isMobile, "touch interactions");
 

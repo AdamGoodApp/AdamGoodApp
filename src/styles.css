@@ -136,6 +136,12 @@ body {
   background: linear-gradient(180deg, #9fd3ff 0%, #d7efff 55%, #eef7ff 100%);
 }
 
-.sr-only-until-focus:not(:focus-within) {
-  @apply sr-only;
+@keyframes bulb-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
 }

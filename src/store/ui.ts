@@ -14,6 +14,8 @@ export interface UiState {
 	timeMode: TimeMode;
 	/** What the scene currently shows (night factor ≥ 0.5), whatever the mode. */
 	isNight: boolean;
+	/** Bumped whenever the camera view changes, so screen-anchored HUD re-measures. */
+	viewVersion: number;
 }
 
 export const uiStore = new Store<UiState>({
@@ -25,6 +27,7 @@ export const uiStore = new Store<UiState>({
 	isDesktop: true,
 	timeMode: "auto",
 	isNight: false,
+	viewVersion: 0,
 });
 
 export function setUi(patch: Partial<UiState>): void {

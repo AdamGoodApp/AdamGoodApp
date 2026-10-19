@@ -29,6 +29,8 @@ export interface CityWorldOptions {
 	onSelect(id: ZoneId | null): void;
 	onReady(): void;
 	onNightChange(isNight: boolean): void;
+	/** The camera moved, zoomed or the canvas resized: screen positions changed. */
+	onViewChange(): void;
 	onFatal(err: unknown): void;
 }
 
@@ -68,6 +70,8 @@ export class CityWorld {
 	) {
 		this.renderer = renderer;
 		this.reducedMotion = o.reducedMotion;
+		// Shadow passes double the pipelines a CPU rasteriser must compile for the first frame.
+		if (o.lite) renderer.shadowMap.enabled = false;
 		const backend: object = renderer.backend;
 		this.tier =
 			"isWebGPUBackend" in backend && backend.isWebGPUBackend === true
@@ -118,6 +122,7 @@ export class CityWorld {
 				tap: (id) => this.select(id === this.selected ? null : id),
 				panned: () => {
 					this.dirty = true;
+					this.o.onViewChange();
 				},
 			},
 			o.mode,
@@ -204,6 +209,7 @@ export class CityWorld {
 		this.renderer.setSize(w, h, false);
 		this.camera.fit(w / h);
 		this.dirty = true;
+		this.o.onViewChange();
 	}
 
 	select(id: ZoneId | null): void {

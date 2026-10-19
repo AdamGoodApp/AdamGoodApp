@@ -8,33 +8,25 @@ import { setUi, uiStore } from "#/store/ui";
 import { CityCanvas } from "./CityCanvas";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { CvOutline } from "./hud/CvOutline";
-import { DistrictNav } from "./hud/DistrictNav";
 import { HoverLabel } from "./hud/HoverLabel";
-import { IdentityCard } from "./hud/IdentityCard";
 import { NavButtons } from "./hud/NavButtons";
 import { TimeButton } from "./hud/TimeButton";
 import { ZoneCard } from "./hud/ZoneCard";
 import { ZoneDrawer } from "./hud/ZoneDrawer";
+import { ZoneMarkers } from "./hud/ZoneMarkers";
 import { StaticFallback } from "./StaticFallback";
 
 function useAnchor(
 	worldRef: React.RefObject<CityWorld | null>,
 	selected: ZoneId | null,
 ) {
+	const view = useSelector(uiStore, (s) => s.viewVersion);
 	const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null);
 	useEffect(() => {
-		if (!selected) {
-			setAnchor(null);
-			return;
-		}
-		const update = () => {
-			const world = worldRef.current;
-			if (world) setAnchor(world.zoneScreenPoint(selected));
-		};
-		update();
-		window.addEventListener("resize", update);
-		return () => window.removeEventListener("resize", update);
-	}, [worldRef, selected]);
+		void view;
+		const world = worldRef.current;
+		setAnchor(selected && world ? world.zoneScreenPoint(selected) : null);
+	}, [worldRef, selected, view]);
 	return anchor;
 }
 
@@ -71,10 +63,12 @@ export function CityPage() {
 
 	return (
 		<>
-			{!capture && <DistrictNav onSelect={select} onHover={hover} />}
 			<ErrorBoundary>
 				<CityCanvas worldRef={worldRef} />
 			</ErrorBoundary>
+			{!capture && (
+				<ZoneMarkers worldRef={worldRef} onSelect={select} onHover={hover} />
+			)}
 			{!ready && (
 				<div className="pointer-events-none fixed inset-0 flex items-center justify-center">
 					<p className="retro animate-pulse text-sm">LOADING CITY…</p>
@@ -82,7 +76,6 @@ export function CityPage() {
 			)}
 			{!capture && (
 				<>
-					<IdentityCard />
 					<TimeButton />
 					<HoverLabel />
 					<NavButtons layout="corner" />
