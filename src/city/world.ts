@@ -8,6 +8,7 @@ import { PointerController } from "./input";
 import { createRenderer, type GpuTier } from "./renderer";
 import { mulberry32, WORLD_SEED } from "./rng";
 import type { Agent } from "./sim/agent";
+import { simClock } from "./sim/clock";
 import { type BuiltWorld, buildWorld } from "./world/index";
 
 export interface CityWorldOptions {
@@ -136,6 +137,7 @@ export class CityWorld {
 			}
 			if (steps === 3) this.acc = 0;
 		}
+		simClock.value = this.simTime;
 
 		const animating = this.highlights.update(dt, this.reducedMotion);
 		if (this.paused && !this.dirty && !animating && this.rendered) return;

@@ -1,8 +1,9 @@
 import { Mesh, PlaneGeometry } from "three";
-import { color, mix, positionLocal, sin, time, vec3 } from "three/tsl";
+import { color, mix, positionLocal, sin, vec3 } from "three/tsl";
 import { MeshStandardNodeMaterial } from "three/webgpu";
 import { box } from "../geometry";
 import { darken, WATER_DEEP, WATER_LIGHT } from "../palette";
+import { simClock as time } from "../sim/clock";
 import type { BuildContext } from "./context";
 import { OCEAN_HALF, WATER_Y } from "./layout";
 
