@@ -1,0 +1,20 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "adamgoodapp",
+	"compatibility_date": "2026-10-01",
+	"compatibility_flags": ["nodejs_compat"],
+	"main": "@tanstack/react-start/server-entry",
+	"routes": [
+		{ "pattern": "adamgoodapp.com", "custom_domain": true },
+		{ "pattern": "www.adamgoodapp.com", "custom_domain": true }
+	],
+	"observability": {
+		"logs": {
+			"enabled": true,
+			"head_sampling_rate": 1,
+			"invocation_logs": true,
+			"persist": true
+		},
+		"traces": { "enabled": true, "head_sampling_rate": 1, "persist": true }
+	}
+}
