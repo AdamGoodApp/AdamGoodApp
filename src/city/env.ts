@@ -51,10 +51,13 @@ export class DayNight {
 	private phase = 0.2;
 	private mode: TimeMode = "auto";
 	private value = 0;
+	private isNight = false;
 
 	constructor(
 		private readonly sun: DirectionalLight,
 		private readonly hemi: HemisphereLight,
+		/** Called whenever the scene crosses from day to night or back. */
+		private readonly onNightChange: (isNight: boolean) => void,
 	) {
 		this.apply();
 	}
@@ -82,6 +85,10 @@ export class DayNight {
 
 	private apply(): void {
 		const n = this.value;
+		if (n >= 0.5 !== this.isNight) {
+			this.isNight = n >= 0.5;
+			this.onNightChange(this.isNight);
+		}
 		const dusk = 1 - Math.abs(2 * n - 1);
 		night.value = n;
 		bloomStrength.value = 0.1 + 0.35 * n;

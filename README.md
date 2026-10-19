@@ -13,7 +13,7 @@ Senior Full-Stack Engineer in Tokyo — TypeScript, React/TanStack, three.js, AI
 
 ## What it is
 
-My CV as a living, SimCity-style isometric city. Every district is a chapter of my career: hover one to outline it, click it to read that section. Traffic, buses, a tram and police patrols fill the roads, fire crews fight a house fire in the suburbs, ambulances run to the hospital, a rally gathers outside the town hall, the arena lights up its searchlights at night, boats sail past the lighthouse, and an "AdamGoodApp" sign glows on the hill in the middle. The city runs a day/night cycle; the button in the top-right corner switches between auto, day and night. LinkedIn, GitHub and email are in the bottom-right corner.
+My CV as a living, SimCity-style isometric city. Every district is a chapter of my career: hover one to outline it, click it to read that section. Traffic, buses, a tram and police patrols fill the roads, fire crews fight a house fire in the suburbs, ambulances run to the hospital, a rally gathers outside the town hall, the arena lights up its searchlights at night, boats sail past the lighthouse, and an "AdamGoodApp" sign glows on the hill in the middle. The city runs a day/night cycle; the button in the top-right corner flips between day and night, and AUTO resumes the cycle. LinkedIn, GitHub and email are in the bottom-right corner.
 
 ## Districts → CV
 

@@ -23,6 +23,7 @@ export interface CityWorldOptions {
 	onHover(id: ZoneId | null): void;
 	onSelect(id: ZoneId | null): void;
 	onReady(): void;
+	onNightChange(isNight: boolean): void;
 	onFatal(err: unknown): void;
 }
 
@@ -85,7 +86,7 @@ export class CityWorld {
 		sun.shadow.bias = -0.0004;
 		sun.shadow.normalBias = 0.03;
 		this.scene.add(hemi, sun, sun.target);
-		this.dayNight = new DayNight(sun, hemi);
+		this.dayNight = new DayNight(sun, hemi, (n) => o.onNightChange(n));
 		this.dayNight.setMode(o.timeMode);
 		// screenUV.y grows downward: horizon colour at the bottom, zenith at the top.
 		this.scene.backgroundNode = mix(skyTop, skyBottom, screenUV.y);

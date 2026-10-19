@@ -12,6 +12,8 @@ export interface UiState {
 	interacted: boolean;
 	isDesktop: boolean;
 	timeMode: TimeMode;
+	/** What the scene currently shows (night factor ≥ 0.5), whatever the mode. */
+	isNight: boolean;
 }
 
 export const uiStore = new Store<UiState>({
@@ -22,6 +24,7 @@ export const uiStore = new Store<UiState>({
 	interacted: false,
 	isDesktop: true,
 	timeMode: "auto",
+	isNight: false,
 });
 
 export function setUi(patch: Partial<UiState>): void {

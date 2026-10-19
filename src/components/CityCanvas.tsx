@@ -63,6 +63,7 @@ function Canvas({ worldRef }: { worldRef: RefObject<CityWorld | null> }) {
 					setUi(hovered ? { hovered, interacted: true } : { hovered }),
 				onSelect: (selected) => setUi({ selected, interacted: true }),
 				onReady: () => setUi({ ready: true }),
+				onNightChange: (isNight) => setUi({ isNight }),
 				onFatal: fail,
 			});
 			if (cancelled) {
