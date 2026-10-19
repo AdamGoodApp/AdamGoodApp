@@ -36,6 +36,11 @@ export class PointerController {
 		canvas.addEventListener("pointerleave", this.onLeave);
 		// On window so scrolling over the floating HUD (light bulbs, labels) still zooms.
 		window.addEventListener("wheel", this.onWheel, { passive: false });
+		// Safari reports trackpad pinches as gesture events instead of ctrl+wheel.
+		window.addEventListener("gesturestart", this.onGesture, { passive: false });
+		window.addEventListener("gesturechange", this.onGesture, {
+			passive: false,
+		});
 	}
 
 	setMode(mode: CameraMode): void {
@@ -52,6 +57,8 @@ export class PointerController {
 		c.removeEventListener("pointercancel", this.onCancel);
 		c.removeEventListener("pointerleave", this.onLeave);
 		window.removeEventListener("wheel", this.onWheel);
+		window.removeEventListener("gesturestart", this.onGesture);
+		window.removeEventListener("gesturechange", this.onGesture);
 	}
 
 	/** Mouse wheel and trackpad scroll/pinch zoom toward the pointer. */
@@ -66,6 +73,33 @@ export class PointerController {
 		const nx = ((e.clientX - r.left) / r.width) * 2 - 1;
 		const ny = -((e.clientY - r.top) / r.height) * 2 + 1;
 		this.camera.zoomAt(factor, nx, ny);
+		this.updateCursor();
+		this.handlers.panned();
+	};
+
+	private gestureScale = 1;
+
+	/** Safari trackpad pinch: `scale` is cumulative since gesturestart. */
+	private onGesture = (e: Event) => {
+		if (e.target instanceof Element && e.target.closest('[role="dialog"]'))
+			return;
+		e.preventDefault();
+		// Touch pinches on iOS also fire pointer events, which pannable mode already handles.
+		if (this.mode !== "fixed") return;
+		const scale = "scale" in e && typeof e.scale === "number" ? e.scale : 1;
+		if (e.type === "gesturestart") {
+			this.gestureScale = scale;
+			return;
+		}
+		const x =
+			"clientX" in e && typeof e.clientX === "number" ? e.clientX : null;
+		const y =
+			"clientY" in e && typeof e.clientY === "number" ? e.clientY : null;
+		const r = this.canvas.getBoundingClientRect();
+		const nx = x === null ? 0 : ((x - r.left) / r.width) * 2 - 1;
+		const ny = y === null ? 0 : -((y - r.top) / r.height) * 2 + 1;
+		this.camera.zoomAt(scale / this.gestureScale, nx, ny);
+		this.gestureScale = scale;
 		this.updateCursor();
 		this.handlers.panned();
 	};
