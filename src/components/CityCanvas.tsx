@@ -11,7 +11,8 @@ import {
 } from "#/lib/device";
 import { setUi, uiStore } from "#/store/ui";
 
-const WATCHDOG_MS = 8000;
+/** Give slow software rasterisers time to compile pipelines before giving up. */
+const WATCHDOG_MS = 15_000;
 
 function Canvas({ worldRef }: { worldRef: RefObject<CityWorld | null> }) {
 	const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -29,7 +30,7 @@ function Canvas({ worldRef }: { worldRef: RefObject<CityWorld | null> }) {
 		};
 
 		const watchdog = window.setTimeout(() => {
-			if (!uiStore.state.ready) fail(new Error("no frame within 8 s"));
+			if (!uiStore.state.ready) fail(new Error("no frame within 15 s"));
 		}, WATCHDOG_MS);
 
 		const desktopMq = matchMedia(DESKTOP_QUERY);
