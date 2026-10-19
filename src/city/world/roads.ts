@@ -1,5 +1,5 @@
 import { Vector3 } from "three";
-import { box, cyl } from "../geometry";
+import { box, cyl, GLOW, glow } from "../geometry";
 import { LANE, ROAD, SIDEWALK } from "../palette";
 import { Polyline } from "../sim/path";
 import type { BuildContext } from "./context";
@@ -19,7 +19,7 @@ const SPAN = LAND_HALF * 2;
 function lamp(x: number, z: number): ReturnType<typeof cyl>[] {
 	return [
 		cyl(0.08, 0.1, 4, 6, 0x5a5d62, x, SIDEWALK_Y, z),
-		box(0.5, 0.3, 0.5, 0xfff1c4, x, SIDEWALK_Y + 4, z),
+		glow(box(0.5, 0.3, 0.5, 0xfff1c4, x, SIDEWALK_Y + 4, z), GLOW.night),
 	];
 }
 

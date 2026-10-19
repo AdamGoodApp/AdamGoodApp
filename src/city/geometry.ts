@@ -9,14 +9,18 @@ import {
 	DynamicDrawUsage,
 	Euler,
 	Float32BufferAttribute,
+	FrontSide,
 	InstancedMesh,
 	type Material,
 	Matrix4,
 	Quaternion,
+	type Side,
 	Vector3,
 } from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { attribute, fract, positionLocal, step, vertexColor } from "three/tsl";
 import { MeshBasicNodeMaterial, MeshLambertNodeMaterial } from "three/webgpu";
+import { night, simClock } from "./env";
 
 const tmpColor = new Color();
 
@@ -33,8 +37,30 @@ function normalise(geo: BufferGeometry): BufferGeometry {
 	return g;
 }
 
-export function paint(geo: BufferGeometry, hex: number): BufferGeometry {
+/**
+ * Per-vertex emission class carried by every painted geometry (`glow` attribute):
+ * `night` lights up after dusk (lamps, headlights), `siren` flashes red/blue by
+ * side all day, `always` glows a little by day and fully at night (screens, neon).
+ */
+export const GLOW = { none: 0, night: 1, siren: 2, always: 3 } as const;
+export type Glow = (typeof GLOW)[keyof typeof GLOW];
+
+function setGlow(g: BufferGeometry, glow: Glow): BufferGeometry {
+	const n = g.getAttribute("position").count;
+	g.setAttribute(
+		"glow",
+		new BufferAttribute(new Float32Array(n).fill(glow), 1),
+	);
+	return g;
+}
+
+export function paint(
+	geo: BufferGeometry,
+	hex: number,
+	glow: Glow = GLOW.none,
+): BufferGeometry {
 	const g = normalise(geo);
+	setGlow(g, glow);
 	tmpColor.setHex(hex);
 	const n = g.getAttribute("position").count;
 	const arr = new Float32Array(n * 3);
@@ -53,6 +79,7 @@ export function paintBy(
 	pick: (x: number, y: number, z: number, tri: number) => number,
 ): BufferGeometry {
 	const g = normalise(geo);
+	setGlow(g, GLOW.none);
 	const pos = g.getAttribute("position");
 	const arr = new Float32Array(pos.count * 3);
 	for (let t = 0; t < pos.count / 3; t++) {
@@ -190,20 +217,36 @@ export function merge(list: BufferGeometry[]): BufferGeometry {
 	return merged;
 }
 
-export const MAT_STATIC = new MeshLambertNodeMaterial({
-	vertexColors: true,
-	flatShading: true,
-});
+/** Re-tag an already painted geometry's emission class. */
+export function glow(geo: BufferGeometry, kind: Glow): BufferGeometry {
+	return setGlow(geo, kind);
+}
+
+function glowEmissive() {
+	const g = attribute("glow", "float");
+	const steady = step(0.5, g).mul(step(g, 1.5)).mul(night).mul(1.8);
+	// Left and right halves of a light bar alternate twice a second.
+	const phase = fract(simClock.mul(2.2).add(step(0, positionLocal.x).mul(0.5)));
+	const siren = step(1.5, g).mul(step(g, 2.5)).mul(step(0.5, phase)).mul(3);
+	const always = step(2.5, g).mul(night.mul(1.4).add(0.5));
+	return vertexColor().mul(steady.add(siren).add(always));
+}
+
+function litMaterial(side: Side = FrontSide): MeshLambertNodeMaterial {
+	const m = new MeshLambertNodeMaterial({
+		vertexColors: true,
+		flatShading: true,
+		side,
+	});
+	// NodeMaterial reads emissiveNode for every lit material; the Lambert typings omit it.
+	Object.assign(m, { emissiveNode: glowEmissive() });
+	return m;
+}
+
+export const MAT_STATIC = litMaterial();
 /** Instance colour multiplies vertex colour: paint tintable parts WHITE. */
-export const MAT_INSTANCED = new MeshLambertNodeMaterial({
-	vertexColors: true,
-	flatShading: true,
-});
-export const MAT_BOAT = new MeshLambertNodeMaterial({
-	vertexColors: true,
-	flatShading: true,
-	side: DoubleSide,
-});
+export const MAT_INSTANCED = litMaterial();
+export const MAT_BOAT = litMaterial(DoubleSide);
 export const MAT_WINDOW = new MeshBasicNodeMaterial({ color: 0xffffff });
 
 export function instanced(

@@ -23,6 +23,8 @@ export interface BuildContext {
 	readonly density: number;
 	/** Painted, non-indexed geometries baked into the single static mesh. */
 	readonly statics: BufferGeometry[];
+	/** Textured building walls from `facadeBox` (kit/facade.ts), merged into one mesh. */
+	readonly facades: BufferGeometry[];
 	/** Scene objects that are not part of the static merge (pools, textured meshes, ocean). */
 	readonly group: Group;
 	readonly agents: Agent[];

@@ -1,5 +1,6 @@
 import { Group, Material, Mesh, Texture } from "three";
 import { MAT_STATIC, merge } from "../geometry";
+import { facadeMaterial } from "../kit/facade";
 import type { Rng } from "../rng";
 import type { Agent } from "../sim/agent";
 import { createPeople } from "../sim/people";
@@ -32,6 +33,7 @@ export function buildWorld(rng: Rng, density: number): BuiltWorld {
 		rng,
 		density,
 		statics: [],
+		facades: [],
 		group,
 		agents: [],
 		windows: [],
@@ -64,6 +66,12 @@ export function buildWorld(rng: Rng, density: number): BuiltWorld {
 	staticMesh.castShadow = true;
 	staticMesh.receiveShadow = true;
 	group.add(staticMesh);
+	if (ctx.facades.length > 0) {
+		const facades = new Mesh(merge(ctx.facades), facadeMaterial());
+		facades.castShadow = true;
+		facades.receiveShadow = true;
+		group.add(facades);
+	}
 
 	return {
 		group,

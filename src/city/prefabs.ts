@@ -4,7 +4,17 @@ import {
 	BufferGeometry as Geo,
 	IcosahedronGeometry,
 } from "three";
-import { box, cone, cyl, merge, paint, place, prism } from "./geometry";
+import {
+	box,
+	cone,
+	cyl,
+	GLOW,
+	glow,
+	merge,
+	paint,
+	place,
+	prism,
+} from "./geometry";
 import { darken, LEAF, PINE, TRUNK, WHITE } from "./palette";
 
 /**
@@ -108,7 +118,7 @@ export function bench(): BufferGeometry {
 export function lamp(): BufferGeometry {
 	return merge([
 		cyl(0.08, 0.1, 3.5, 6, 0x5a5d62),
-		box(0.4, 0.3, 0.4, 0xfff1c4, 0, 3.5),
+		glow(box(0.4, 0.3, 0.4, 0xfff1c4, 0, 3.5), GLOW.night),
 	]);
 }
 
@@ -133,11 +143,93 @@ function wheels(xs: number[], zs: number[], r: number): BufferGeometry[] {
 	return out;
 }
 
+/** Headlights (front, +Z) and tail lights that switch on at night. */
+function lights(
+	halfW: number,
+	front: number,
+	back: number,
+	y: number,
+): BufferGeometry[] {
+	return [-1, 1].flatMap((side) => [
+		glow(
+			box(0.35, 0.18, 0.06, 0xfff4d6, side * (halfW - 0.3), y, front),
+			GLOW.night,
+		),
+		glow(
+			box(0.35, 0.16, 0.06, 0xff3020, side * (halfW - 0.3), y, back),
+			GLOW.night,
+		),
+	]);
+}
+
+/** Roof light bar: red half on -X, blue half on +X; flashes day and night. */
+function lightBar(y: number, z: number, w = 1.2): BufferGeometry[] {
+	return [
+		glow(box(w / 2, 0.18, 0.35, 0xff2020, -w / 4, y, z), GLOW.siren),
+		glow(box(w / 2, 0.18, 0.35, 0x2050ff, w / 4, y, z), GLOW.siren),
+	];
+}
+
 export function car(): BufferGeometry {
 	return merge([
 		box(1.8, 0.6, 4.2, WHITE, 0, 0.35),
 		box(1.6, 0.5, 2.0, GLASS, 0, 0.95, -0.2),
+		...lights(0.9, 2.12, -2.12, 0.6),
 		...wheels([-0.85, 0.85], [-1.3, 1.3], 0.35),
+	]);
+}
+
+/** Black-and-white patrol car with a flashing light bar. Use a WHITE instance colour. */
+export function policeCar(): BufferGeometry {
+	return merge([
+		box(1.8, 0.6, 4.4, 0x1c1f26, 0, 0.35),
+		box(1.82, 0.3, 2.2, 0xf4f4f4, 0, 0.55, 0),
+		box(1.6, 0.5, 2.0, GLASS, 0, 0.95, -0.2),
+		...lightBar(1.45, -0.1),
+		...lights(0.9, 2.22, -2.22, 0.6),
+		...wheels([-0.85, 0.85], [-1.35, 1.35], 0.35),
+	]);
+}
+
+/** Box-body ambulance with red stripe and light bar. Use a WHITE instance colour. */
+export function ambulance(): BufferGeometry {
+	return merge([
+		box(2.1, 0.9, 1.6, 0xf6f6f6, 0, 0.4, 2.0),
+		box(1.9, 0.5, 0.9, GLASS, 0, 1.2, 2.2),
+		box(2.3, 2.3, 3.6, 0xf6f6f6, 0, 0.4, -0.6),
+		box(2.32, 0.3, 3.6, 0xd62828, 0, 1.2, -0.6),
+		box(0.3, 0.9, 0.06, 0xd62828, 0, 1.4, -2.42),
+		box(0.9, 0.3, 0.06, 0xd62828, 0, 1.7, -2.42),
+		...lightBar(2.75, 1.0, 1.6),
+		...lights(1.05, 2.82, -2.42, 0.7),
+		...wheels([-1.0, 1.0], [-1.6, 1.8], 0.42),
+	]);
+}
+
+/** Fire engine with ladder; length along Z. Use a WHITE instance colour. */
+export function fireTruck(): BufferGeometry {
+	return merge([
+		box(2.4, 1.6, 2.2, 0xc8281e, 0, 0.5, 3.3),
+		box(2.2, 0.7, 1.0, GLASS, 0, 1.4, 3.9),
+		box(2.4, 1.9, 6, 0xc8281e, 0, 0.5, -0.8),
+		box(2.42, 0.2, 6, 0xe8e2d0, 0, 1.2, -0.8),
+		box(1.0, 0.3, 7, 0xc9ccd1, 0, 2.5, -0.5),
+		box(0.08, 0.3, 7, 0x8c9196, -0.45, 2.75, -0.5),
+		box(0.08, 0.3, 7, 0x8c9196, 0.45, 2.75, -0.5),
+		...lightBar(2.15, 4.0, 2.0),
+		...lights(1.15, 4.42, -3.82, 0.8),
+		...wheels([-1.1, 1.1], [-2.8, -1.4, 3.0], 0.5),
+	]);
+}
+
+/** Firefighter in a yellow coat and red helmet. Use a WHITE instance colour. */
+export function firefighter(): BufferGeometry {
+	return merge([
+		box(0.44, 0.65, 0.3, 0xe8c23a, 0, 0.7),
+		box(0.28, 0.26, 0.28, SKIN, 0, 1.33),
+		box(0.34, 0.12, 0.34, 0xc8281e, 0, 1.55),
+		box(0.15, 0.7, 0.2, 0x2b2b2b, -0.1, 0),
+		box(0.15, 0.7, 0.2, 0x2b2b2b, 0.1, 0),
 	]);
 }
 
@@ -146,6 +238,7 @@ export function bus(): BufferGeometry {
 		box(2.4, 2.6, 9, WHITE, 0, 0.4),
 		box(2.45, 0.9, 8, GLASS, 0, 1.5, -0.2),
 		box(2.3, 0.9, 0.05, GLASS, 0, 1.5, 4.5),
+		...lights(1.2, 4.52, -4.52, 0.8),
 		...wheels([-1.1, 1.1], [-3.2, 0, 3.2], 0.45),
 	]);
 }

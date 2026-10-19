@@ -22,6 +22,7 @@ function Canvas({ worldRef }: { worldRef: RefObject<CityWorld | null> }) {
 		const canvas = canvasRef.current;
 		if (!canvas) return;
 		let world: CityWorld | null = null;
+		let unsubscribeTime = () => {};
 		let cancelled = false;
 		const fail = (err: unknown) => {
 			if (cancelled) return;
@@ -57,6 +58,7 @@ function Canvas({ worldRef }: { worldRef: RefObject<CityWorld | null> }) {
 				mode: isDesktop ? "fixed" : "pannable",
 				density: isDesktop ? 1 : 0.5,
 				reducedMotion: prefersReducedMotion(),
+				timeMode: uiStore.state.timeMode,
 				onHover: (hovered) =>
 					setUi(hovered ? { hovered, interacted: true } : { hovered }),
 				onSelect: (selected) => setUi({ selected, interacted: true }),
@@ -68,6 +70,10 @@ function Canvas({ worldRef }: { worldRef: RefObject<CityWorld | null> }) {
 				return;
 			}
 			worldRef.current = world;
+			const w0 = world;
+			unsubscribeTime = uiStore.subscribe((state) =>
+				w0.setTimeMode(state.timeMode),
+			).unsubscribe;
 			setUi({ tier: world.tier });
 			const w = world;
 			if (
@@ -93,6 +99,7 @@ function Canvas({ worldRef }: { worldRef: RefObject<CityWorld | null> }) {
 		document.addEventListener("visibilitychange", onVisibility);
 		return () => {
 			cancelled = true;
+			unsubscribeTime();
 			window.clearTimeout(watchdog);
 			desktopMq.removeEventListener("change", onDesktop);
 			motionMq.removeEventListener("change", onMotion);

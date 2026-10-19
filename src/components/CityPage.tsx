@@ -12,6 +12,7 @@ import { DistrictNav } from "./hud/DistrictNav";
 import { HoverLabel } from "./hud/HoverLabel";
 import { IdentityCard } from "./hud/IdentityCard";
 import { NavButtons } from "./hud/NavButtons";
+import { TimeButton } from "./hud/TimeButton";
 import { ZoneCard } from "./hud/ZoneCard";
 import { ZoneDrawer } from "./hud/ZoneDrawer";
 import { StaticFallback } from "./StaticFallback";
@@ -48,9 +49,11 @@ export function CityPage() {
 
 	useEffect(() => {
 		setCapture(readParam("capture") === "1");
+		const time = readParam("time");
 		setUi({
 			isDesktop: isDesktopViewport(),
 			...(readParam("tier") === "fallback" ? { tier: "fallback" } : {}),
+			...(time === "day" || time === "night" ? { timeMode: time } : {}),
 		});
 	}, []);
 
@@ -80,6 +83,7 @@ export function CityPage() {
 			{!capture && (
 				<>
 					<IdentityCard />
+					<TimeButton />
 					<HoverLabel />
 					<NavButtons layout="corner" />
 					{isDesktop && selected && anchor && (

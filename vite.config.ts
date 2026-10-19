@@ -14,6 +14,8 @@ export default defineConfig({
 			"three/webgpu",
 			"three/tsl",
 			"three/addons/utils/BufferGeometryUtils.js",
+			"three/addons/tsl/display/BloomNode.js",
+			"three/addons/tsl/display/GaussianBlurNode.js",
 		],
 	},
 	plugins: [

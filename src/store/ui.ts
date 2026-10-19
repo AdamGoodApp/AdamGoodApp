@@ -1,4 +1,5 @@
 import { Store } from "@tanstack/store";
+import type { TimeMode } from "#/city/env";
 import type { ZoneId } from "#/data/zones";
 
 export type RendererTier = "pending" | "webgpu" | "webgl2" | "fallback";
@@ -10,6 +11,7 @@ export interface UiState {
 	selected: ZoneId | null;
 	interacted: boolean;
 	isDesktop: boolean;
+	timeMode: TimeMode;
 }
 
 export const uiStore = new Store<UiState>({
@@ -19,6 +21,7 @@ export const uiStore = new Store<UiState>({
 	selected: null,
 	interacted: false,
 	isDesktop: true,
+	timeMode: "auto",
 });
 
 export function setUi(patch: Partial<UiState>): void {

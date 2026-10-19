@@ -1,14 +1,16 @@
 import { DirectionalLight, HemisphereLight, Scene, Vector3 } from "three";
-import type { WebGPURenderer } from "three/webgpu";
+import { mix, screenUV } from "three/tsl";
+import type { RenderPipeline, WebGPURenderer } from "three/webgpu";
 import { ZONE_BY_ID, type ZoneId } from "#/data/zones";
 import type { CameraMode } from "./camera";
 import { IsoCamera } from "./camera";
+import { DayNight, simClock, skyBottom, skyTop, type TimeMode } from "./env";
 import { ZoneHighlights } from "./highlight";
 import { PointerController } from "./input";
+import { createPipeline } from "./post";
 import { createRenderer, type GpuTier } from "./renderer";
 import { mulberry32, WORLD_SEED } from "./rng";
 import type { Agent } from "./sim/agent";
-import { simClock } from "./sim/clock";
 import { type BuiltWorld, buildWorld } from "./world/index";
 
 export interface CityWorldOptions {
@@ -17,6 +19,7 @@ export interface CityWorldOptions {
 	mode: CameraMode;
 	density: number;
 	reducedMotion: boolean;
+	timeMode: TimeMode;
 	onHover(id: ZoneId | null): void;
 	onSelect(id: ZoneId | null): void;
 	onReady(): void;
@@ -35,6 +38,8 @@ export class CityWorld {
 	private readonly built: BuiltWorld;
 	private readonly agents: Agent[];
 	private readonly resizeObserver: ResizeObserver;
+	private readonly dayNight: DayNight;
+	private readonly pipeline: RenderPipeline;
 	private selected: ZoneId | null = null;
 	private hovered: ZoneId | null = null;
 	private paused: boolean;
@@ -80,8 +85,15 @@ export class CityWorld {
 		sun.shadow.bias = -0.0004;
 		sun.shadow.normalBias = 0.03;
 		this.scene.add(hemi, sun, sun.target);
+		this.dayNight = new DayNight(sun, hemi);
+		this.dayNight.setMode(o.timeMode);
+		// screenUV.y grows downward: horizon colour at the bottom, zenith at the top.
+		this.scene.backgroundNode = mix(skyTop, skyBottom, screenUV.y);
 
 		this.camera = new IsoCamera(o.mode);
+		this.pipeline = createPipeline(renderer, this.scene, this.camera.camera, {
+			tiltShift: o.density >= 1,
+		});
 		this.highlights = new ZoneHighlights(this.scene);
 
 		this.built = buildWorld(mulberry32(WORLD_SEED), o.density);
@@ -139,10 +151,19 @@ export class CityWorld {
 		}
 		simClock.value = this.simTime;
 
+		const lighting = this.dayNight.update(dt, !this.paused);
 		const animating = this.highlights.update(dt, this.reducedMotion);
-		if (this.paused && !this.dirty && !animating && this.rendered) return;
+		if (
+			this.paused &&
+			!this.dirty &&
+			!animating &&
+			!lighting &&
+			this.rendered
+		) {
+			return;
+		}
 		this.dirty = false;
-		this.renderer.render(this.scene, this.camera.camera);
+		this.pipeline.render();
 
 		if (!this.rendered) {
 			this.rendered = true;
@@ -204,6 +225,11 @@ export class CityWorld {
 		return { x: this.camera.target.x, z: this.camera.target.z };
 	}
 
+	setTimeMode(mode: TimeMode): void {
+		this.dayNight.setMode(mode);
+		this.dirty = true;
+	}
+
 	setPaused(paused: boolean): void {
 		this.paused = paused || this.reducedMotion;
 		this.dirty = true;
@@ -222,6 +248,7 @@ export class CityWorld {
 		this.o.canvas.removeEventListener("webglcontextlost", this.onContextLost);
 		this.highlights.dispose();
 		this.built.dispose();
+		this.pipeline.dispose();
 		this.renderer.dispose();
 	}
 }
