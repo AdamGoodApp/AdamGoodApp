@@ -59,6 +59,7 @@ export const ZONES: readonly ZoneDef[] = [
 		topic: "Technical skills",
 		rect: { minX: 33, maxX: 84, minZ: -27, maxZ: 27 },
 		anchor: [58, 16, 0],
+		top: 34,
 	},
 	{
 		id: "beach",
@@ -66,6 +67,7 @@ export const ZONES: readonly ZoneDef[] = [
 		topic: "About me",
 		rect: { minX: -84, maxX: -33, minZ: 33, maxZ: 84 },
 		anchor: [-58, 12, 58],
+		top: 28,
 	},
 	{
 		id: "themepark",
@@ -73,6 +75,7 @@ export const ZONES: readonly ZoneDef[] = [
 		topic: "Open source",
 		rect: { minX: -27, maxX: 27, minZ: 33, maxZ: 84 },
 		anchor: [0, 24, 58],
+		top: 30,
 	},
 	{
 		id: "residential",

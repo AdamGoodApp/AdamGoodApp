@@ -2,10 +2,18 @@ import type { BufferGeometry } from "three";
 import { box, cone, cyl, GLOW, glow, merge, place } from "../geometry";
 import { TILE } from "../kit/atlas";
 import { FLOOR_H, facadeAt, facadeBox } from "../kit/facade";
-import { firefighter, fireTruck, policeCar } from "../prefabs";
+import {
+	bench,
+	firefighter,
+	fireTruck,
+	person,
+	policeCar,
+	roundTree,
+} from "../prefabs";
 import type { BuildContext } from "./context";
 import { SIDEWALK_Y } from "./layout";
 import type { SignSpec } from "./signs";
+import { tintWhite } from "./tint";
 
 /** Fire station: front (bay doors) faces +X onto the ring road; centre and footprint size. */
 export const FIRE_STATION = { x: 75.5, z: 8.5, w: 9, d: 7, floors: 3 } as const;
@@ -202,7 +210,137 @@ function policeStation(ctx: BuildContext, signs: SignSpec[]): void {
 	);
 }
 
+const HEDGE = 0x3f8a4a;
+const CONE = 0xff7a1a;
+
+function cone2(ctx: BuildContext, x: number, z: number): void {
+	ctx.statics.push(
+		box(0.4, 0.05, 0.4, 0x222222, x, APRON_TOP, z),
+		cone(0.17, 0.55, 6, CONE, x, APRON_TOP + 0.05, z),
+		box(0.22, 0.08, 0.22, 0xffffff, x, APRON_TOP + 0.22, z),
+	);
+}
+
+function bollard(ctx: BuildContext, x: number, z: number, hex: number): void {
+	ctx.statics.push(cyl(0.1, 0.1, 0.75, 6, hex, x, SIDEWALK_Y, z));
+}
+
+function hydrant(ctx: BuildContext, x: number, z: number): void {
+	ctx.statics.push(
+		cyl(0.14, 0.16, 0.55, 6, 0xd62828, x, SIDEWALK_Y, z),
+		cyl(0.18, 0.18, 0.08, 6, 0xd62828, x, SIDEWALK_Y + 0.55, z),
+		box(0.4, 0.12, 0.12, 0xd62828, x, SIDEWALK_Y + 0.25, z),
+	);
+}
+
+function planterBox(
+	ctx: BuildContext,
+	x: number,
+	z: number,
+	w: number,
+	d: number,
+	flower: number,
+): void {
+	ctx.statics.push(
+		box(w, 0.4, d, 0x8a5a3c, x, SIDEWALK_Y, z),
+		box(w - 0.1, 0.18, d - 0.1, HEDGE, x, SIDEWALK_Y + 0.4, z),
+		box(0.25, 0.14, 0.25, flower, x - w / 4, SIDEWALK_Y + 0.58, z),
+		box(0.25, 0.14, 0.25, flower, x + w / 4, SIDEWALK_Y + 0.58, z),
+	);
+}
+
+function standing(
+	ctx: BuildContext,
+	x: number,
+	z: number,
+	ry: number,
+	shirt: number,
+): void {
+	ctx.statics.push(
+		place(tintWhite(person(), shirt), { x, y: SIDEWALK_Y, z, ry }),
+	);
+}
+
+/** Hedges, trees, cones, bollards, benches and standing staff around both stations. */
+function serviceDetails(ctx: BuildContext): void {
+	const { statics } = ctx;
+	const y = SIDEWALK_Y;
+	const { x: fx, z: fz, w: fw } = FIRE_STATION;
+	const fireWallZ = fz - fw / 2;
+
+	// Street side of the fire station (z 2..4): planters, bench, hydrant, chatting crew.
+	planterBox(ctx, 72.6, 3.35, 1.1, 0.5, 0xe8463c);
+	planterBox(ctx, 78.4, 3.35, 1.1, 0.5, 0xf2c94c);
+	statics.push(place(bench(), { x: fx, y, z: fireWallZ - 0.45, ry: Math.PI }));
+	hydrant(ctx, 73.6, 2.45);
+	hydrant(ctx, 80.2, 2.45);
+	bollard(ctx, 80.9, 3.5, 0xd62828);
+	bollard(ctx, 81.9, 3.5, 0xd62828);
+	standing(ctx, 74.3, 3.0, 0, 0xe85d5d);
+	standing(ctx, 76.8, 3.1, Math.PI, 0x4f8ef7);
+
+	// Hose-drill yard behind the shops (x 69.4..72, z 7..13).
+	statics.push(
+		box(0.7, 0.55, 5.8, HEDGE, 69.85, y, 10),
+		place(roundTree(0.45), { x: 71.1, y, z: 12.2 }),
+		place(bench(), { x: 71.3, y, z: 9.2, ry: Math.PI / 2 }),
+		box(1.8, 0.04, 5.2, 0x9aa0a8, 70.9, y, 9.8),
+		box(0.3, 0.3, 0.3, 0xd62828, 70.8, y, 7.4),
+		box(0.3, 0.3, 0.3, 0xe8c23a, 71.3, y, 7.4),
+		cyl(0.35, 0.35, 0.5, 8, 0x444a52, 71.2, y, 7.9),
+	);
+	hydrant(ctx, 70.5, 11);
+	for (const [cx, cz] of [
+		[70.7, 8.4],
+		[71.5, 10.6],
+	] as const) {
+		statics.push(
+			cone(0.17, 0.5, 6, CONE, cx, y, cz),
+			box(0.22, 0.08, 0.22, 0xffffff, cx, y + 0.2, cz),
+		);
+	}
+	statics.push(
+		place(firefighter(), {
+			x: 71.3,
+			y,
+			z: 10.6,
+			ry: Math.PI,
+		}),
+	);
+
+	// Apron beside the engine: cones, hydrant and an idle firefighter.
+	cone2(ctx, 79.4, 4.5);
+	cone2(ctx, 79.4, 12.5);
+	cone2(ctx, 82.2, 8.2);
+	hydrant(ctx, 82.3, 9.5);
+	statics.push(
+		place(firefighter(), { x: 79.4, y: APRON_TOP, z: 8.6, ry: Math.PI / 2 }),
+	);
+
+	// Rear strip between the stations (z 13..14.5).
+	statics.push(box(12.4, 0.55, 0.6, HEDGE, 76.1, y, 13.75));
+	for (const x of [71.2, 74.8, 78.4, 81.5]) {
+		statics.push(place(roundTree(0.42), { x, y: y + 0.4, z: 13.75 }));
+	}
+	statics.push(box(0.7, 0.55, 7.2, HEDGE, 69.85, y, 18.3));
+	statics.push(
+		place(roundTree(0.4), { x: 69.95, y: y + 0.4, z: 16.2 }),
+		place(roundTree(0.4), { x: 69.95, y: y + 0.4, z: 20.4 }),
+	);
+
+	// Police apron: bollards, planters, officers and visitors.
+	for (const bx of [72.4, 73.6, 74.4, 78.8, 80, 81.2]) {
+		bollard(ctx, bx, 25.2, 0x3a86ff);
+	}
+	planterBox(ctx, 72.5, 22.4, 0.9, 0.5, 0xf2c94c);
+	planterBox(ctx, 80.5, 22.4, 0.9, 0.5, 0xe8463c);
+	standing(ctx, 75.7, 24.4, 0, 0x1f3a6e);
+	standing(ctx, 77.3, 24.4, Math.PI, 0x1f3a6e);
+	standing(ctx, 76.5, 25.0, Math.PI, 0xf29e6b);
+}
+
 export function buildCivicServices(ctx: BuildContext, signs: SignSpec[]): void {
 	fireStation(ctx, signs);
 	policeStation(ctx, signs);
+	serviceDetails(ctx);
 }

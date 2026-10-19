@@ -14,11 +14,15 @@ export function createPipeline(
 	renderer: WebGPURenderer,
 	scene: Scene,
 	camera: Camera,
-	{ tiltShift }: { tiltShift: boolean },
+	{ tiltShift, lite }: { tiltShift: boolean; lite: boolean },
 ): RenderPipeline {
 	const pipeline = new RenderPipeline(renderer);
-	const scenePass = pass(scene, camera, { samples: 4 });
+	const scenePass = pass(scene, camera, { samples: lite ? 0 : 4 });
 	const color = scenePass.getTextureNode("output");
+	if (lite) {
+		pipeline.outputNode = color;
+		return pipeline;
+	}
 	const lit = color.add(bloom(color, bloomStrength, 0.35, 0.85));
 	if (!tiltShift) {
 		pipeline.outputNode = lit;

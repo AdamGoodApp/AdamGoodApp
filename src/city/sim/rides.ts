@@ -397,3 +397,96 @@ export class BumperCarsAgent implements Agent {
 		pool.commit();
 	}
 }
+
+const FLUME_LIFT_SPEED = 1.8;
+const FLUME_TOP_SPEED = 1.5;
+const FLUME_FLAT_SPEED = 1.8;
+const FLUME_FALL_SPEED = 6;
+const FLUME_ACCEL = 4;
+const FLUME_DECEL = 3;
+/** Boats that get closer than this to the one ahead slow down to its speed. */
+const FLUME_HEADWAY = 4.5;
+
+/** A hollowed-log boat (front +Z, origin on the water line) carrying three riders. */
+function flumeBoat(): BufferGeometry {
+	const parts: BufferGeometry[] = [
+		box(1.3, 0.45, 2.8, 0x9c5b34, 0, -0.2, 0),
+		box(1.36, 0.08, 2.86, 0xf2c94c, 0, 0.25, 0),
+		box(1.0, 0.5, 0.5, 0xb8693d, 0, 0.0, 1.3),
+		box(0.9, 0.3, 0.3, 0x7a4526, 0, 0.5, 1.35),
+	];
+	const riders: [number, number][] = [
+		[0.55, 0],
+		[-0.15, 1],
+		[-0.85, 2],
+	];
+	for (const [z, k] of riders) {
+		const shirt = SHIRTS[(k * 2 + 1) % SHIRTS.length] as number;
+		parts.push(
+			box(0.4, 0.5, 0.22, shirt, 0, 0.12, z),
+			box(0.24, 0.24, 0.24, SKIN, 0, 0.64, z),
+		);
+	}
+	return merge(parts);
+}
+
+/**
+ * Log flume: hollowed-log boats ride a closed 3D channel — slow up the lift hill, a plateau
+ * at the top, a fast plunge and a slow, splashy drift back to the station.
+ * `track` is a closed polyline of the water-surface centreline.
+ */
+export class LogFlumeAgent implements Agent {
+	readonly pool: Pool;
+	private readonly s: number[] = [];
+	private readonly v: number[] = [];
+	private readonly topY: number;
+
+	constructor(
+		private readonly track: Polyline,
+		count: number,
+	) {
+		this.pool = new Pool(flumeBoat(), MAT_INSTANCED, count, { shadow: true });
+		let top = 0;
+		for (const p of track.points) top = Math.max(top, p.y);
+		this.topY = top;
+		for (let i = 0; i < count; i++) {
+			this.s.push((track.length * i) / count);
+			this.v.push(FLUME_FLAT_SPEED);
+		}
+	}
+
+	update(dt: number): void {
+		const { track, pool, s, v } = this;
+		const n = pool.count;
+		for (let i = 0; i < n; i++) {
+			track.pointAt(s[i] as number, pos);
+			track.tangentAt(s[i] as number, tan);
+			let target = FLUME_FLAT_SPEED;
+			if (tan.y > 0.08) target = FLUME_LIFT_SPEED;
+			else if (tan.y < -0.08) target = FLUME_FALL_SPEED;
+			else if (pos.y > this.topY - 0.3) target = FLUME_TOP_SPEED;
+			const cur = v[i] as number;
+			v[i] =
+				target > cur
+					? Math.min(target, cur + FLUME_ACCEL * dt)
+					: Math.max(target, cur - FLUME_DECEL * dt);
+		}
+		for (let i = 0; i < n; i++) {
+			const ahead = (i + 1) % n;
+			const gap =
+				(((s[ahead] as number) - (s[i] as number)) % track.length) +
+				track.length;
+			if (gap % track.length < FLUME_HEADWAY) {
+				v[i] = Math.min(v[i] as number, v[ahead] as number);
+			}
+			s[i] = (s[i] as number) + (v[i] as number) * dt;
+		}
+		for (let i = 0; i < n; i++) {
+			track.pointAt(s[i] as number, pos);
+			track.tangentAt(s[i] as number, tan);
+			pos.y -= 0.12;
+			pool.write(i, pos, Math.atan2(tan.x, tan.z), -Math.asin(tan.y));
+		}
+		pool.commit();
+	}
+}

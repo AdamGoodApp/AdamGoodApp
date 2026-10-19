@@ -19,10 +19,17 @@ import {
 	prism,
 } from "../geometry";
 import { WHITE } from "../palette";
-import { ambulance, firefighter, fireTruck, policeCar } from "../prefabs";
+import {
+	ambulance,
+	firefighter,
+	fireTruck,
+	person,
+	policeCar,
+} from "../prefabs";
 import { mulberry32, type Rng } from "../rng";
 import type { BuildContext } from "../world/context";
 import { ROAD_Y, SIDEWALK_Y } from "../world/layout";
+import { tintWhite } from "../world/tint";
 import { type Agent, Pool, scaled } from "./agent";
 import { type CrowdSpot, createCrowd } from "./crowd";
 
@@ -58,7 +65,7 @@ const FLAME_TINTS = [0xffffff, 0xffe9c8, 0xffd2a0] as const;
 const FLAME_COUNT = 24;
 const SMOKE_COUNT = 30;
 const DROPS_PER_JET = 22;
-const FIGHTER_COUNT = 6;
+const FIGHTER_COUNT = 8;
 /** Seconds for the fire to swell and ebb once. */
 const PULSE_PERIOD = 40;
 
@@ -168,6 +175,27 @@ export function buildFireScene(ctx: BuildContext, site: FireSite): void {
 			new Vector3(site.x + 2.5, 5.5, site.z + site.d / 2 + 0.15),
 		),
 	);
+	// Police tape across the lane between the cones, and paramedics with a stretcher behind the ambulance.
+	const ambX = site.streetX + 0.6;
+	statics.push(
+		box(0.04, 0.05, 4.4, 0xffd400, site.laneX0 + 2.0, ROAD_Y + 0.5, site.laneZ),
+		box(0.7, 0.1, 1.9, 0xe8eaee, ambX, ROAD_Y + 0.55, site.laneZ - 5.2),
+		box(0.7, 0.06, 1.9, 0x3b7dd8, ambX, ROAD_Y + 0.65, site.laneZ - 5.2),
+		box(0.06, 0.55, 0.06, 0x8c9196, ambX - 0.3, ROAD_Y, site.laneZ - 5.9),
+		box(0.06, 0.55, 0.06, 0x8c9196, ambX + 0.3, ROAD_Y, site.laneZ - 5.9),
+		box(0.06, 0.55, 0.06, 0x8c9196, ambX - 0.3, ROAD_Y, site.laneZ - 4.5),
+		box(0.06, 0.55, 0.06, 0x8c9196, ambX + 0.3, ROAD_Y, site.laneZ - 4.5),
+	);
+	for (const dx of [-0.9, 0.9]) {
+		statics.push(
+			place(tintWhite(person(), ctx.rng.pick([0x2f7a4a, 0x3b7dd8])), {
+				x: ambX + dx,
+				y: ROAD_Y,
+				z: site.laneZ - 5.2,
+				ry: dx < 0 ? Math.PI / 2 : -Math.PI / 2,
+			}),
+		);
+	}
 
 	const spots: CrowdSpot[] = [];
 	for (let x = site.laneX0 + 3.5; x <= site.laneX0 + 20; x += 1.15) {
@@ -178,6 +206,17 @@ export function buildFireScene(ctx: BuildContext, site: FireSite): void {
 	}
 	for (const x of [site.laneX0 + 2.2, site.laneX0 + 2.9, site.x + 8.4]) {
 		spots.push({ x, z: walkZ, y: SIDEWALK_Y, ry: Math.PI });
+	}
+	for (let x = site.laneX0 + 4; x <= site.laneX0 + 19.5; x += 2.3) {
+		spots.push({ x, z: site.laneZ + 3.8, y: SIDEWALK_Y, ry: Math.PI });
+	}
+	for (const x of [
+		site.laneX0 + 3.4,
+		site.laneX0 + 4.3,
+		site.x + 7.0,
+		site.x + 9.2,
+	]) {
+		spots.push({ x, z: walkZ - 0.3, y: SIDEWALK_Y, ry: Math.PI });
 	}
 	createCrowd(ctx, spots, { count: spots.length, spread: 0.3 });
 
@@ -376,6 +415,8 @@ function createFireAgent(
 		mk(xA - 3.0, ROAD_Y, site.laneZ + 1.35, north, 0.6, 0),
 		mk(xB + 3.0, SIDEWALK_Y, walkZ, north, 0.4, 0.2),
 		mk(xA - 2.0, SIDEWALK_Y, walkZ, north, 0.6, 0.3),
+		mk(xA + 1.0, ROAD_Y, site.laneZ + 1.35, north, 0.5, 0),
+		mk(xB - 1.0, ROAD_Y, site.laneZ + 1.35, north, 0.5, 0),
 	];
 
 	ctx.group.add(

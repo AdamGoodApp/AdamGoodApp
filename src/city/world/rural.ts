@@ -1,7 +1,8 @@
 import { type BufferGeometry, Vector3 } from "three";
-import { box, cone, cyl, place, prism } from "../geometry";
+import { box, cone, cyl, merge, place, prism } from "../geometry";
 import { TILE } from "../kit/atlas";
 import { walkup } from "../kit/buildings";
+import { FLOOR_H } from "../kit/facade";
 import {
 	darken,
 	FIELD_B,
@@ -16,7 +17,7 @@ import { type CrowdSpot, createCrowd } from "../sim/crowd";
 import { createFarm, createWindmills, FARM_Y, type Rect } from "../sim/farm";
 import { Polyline } from "../sim/path";
 import { createPlacards } from "../sim/rally";
-import { campusHall, rotunda, townHall } from "./civic";
+import { campusHall, library, rotunda, townHall } from "./civic";
 import type { BuildContext } from "./context";
 import { CELL_Y } from "./layout";
 
@@ -24,8 +25,11 @@ import { CELL_Y } from "./layout";
  * "Old Town & Campus" (x[-84,-33] z[-27,27]); usable area x[-82.5,-34.5]
  * z[-25.5,25.5] (every cell edge carries a 1.5 m sidewalk).
  *
- *  x -82.5..-68.5  farm remnant: crop stripes, cow + sheep pastures, barn,
- *                  silo, hay, one windmill
+ *  x -82.5..-68.5  z 3..25.3 farm corner: cow + sheep pastures, barn, silo,
+ *                  greenhouse, allotments, hay, one windmill
+ *  x -82.5..-68.4  z -25.2..-8.6 library + market square (8 stalls, crowd,
+ *                  café terrace); z -7..2 student block (fire escapes),
+ *                  café, bike rack
  *  x -67.5..-62.5  old-town brick walk-ups (z -25.2..-3.6)
  *  x -62..-45.7    town hall (centre -56,-13.8, front +X) + rally plaza
  *                  x -46..-35.5 z -19.3..-8.3, walk-ups either side
@@ -53,10 +57,9 @@ const BRONZE = 0x7d6b4c;
 const STONE = 0xd7d1c2;
 const COURT = 0xd3cabb;
 
-const CROP = { minX: -82, maxX: -69, minZ: -25, maxZ: -17 };
-const COWS: Rect = { minX: -82, maxX: -69, minZ: -15.5, maxZ: -5 };
-const SHEEP: Rect = { minX: -82, maxX: -69, minZ: -3.5, maxZ: 6 };
-const YARD: Rect = { minX: -82, maxX: -69, minZ: 8, maxZ: 25 };
+const COWS: Rect = { minX: -82, maxX: -76, minZ: 3, maxZ: 8.6 };
+const SHEEP: Rect = { minX: -75.4, maxX: -69, minZ: 3, maxZ: 8.6 };
+const YARD: Rect = { minX: -82.4, maxX: -68.6, minZ: 9.4, maxZ: 25.2 };
 
 const WINDMILL = { x: -77.5, z: 23.2 };
 const WINDMILL_HEIGHT = 10;
@@ -181,24 +184,157 @@ function flagpole(
 	);
 }
 
-function farm(ctx: BuildContext): void {
-	const out = ctx.statics;
-	const { rng } = ctx;
-
-	for (let i = 0; i < 10; i++) {
-		const x0 = CROP.minX + i * 1.3;
-		const green = i >= 5;
-		const base = green ? FIELD_B : FIELD_C;
+function bikeRack(
+	out: BufferGeometry[],
+	x: number,
+	z: number,
+	n: number,
+	y = LAWN_Y,
+): void {
+	const len = n * 0.6;
+	out.push(box(len, 0.05, 0.3, IRON, x, y, z));
+	for (let i = 0; i <= n; i++) {
+		out.push(box(0.04, 0.55, 0.04, IRON, x - len / 2 + i * 0.6, y, z));
+	}
+	const tints = [0xe8463c, 0x3b7dd8, 0xf2c94c, 0x58c27a, 0xf28c28] as const;
+	for (let i = 0; i < n; i++) {
+		if (i % 4 === 3) continue;
+		const bx = x - len / 2 + 0.3 + i * 0.6;
+		for (const dz of [-0.42, 0.42]) {
+			out.push(
+				place(cyl(0.3, 0.3, 0.05, 8, IRON, 0, 0, 0), {
+					x: bx,
+					y: y + 0.3,
+					z: z + dz,
+					rz: Math.PI / 2,
+				}),
+			);
+		}
 		out.push(
-			patch(
-				{ minX: x0, maxX: x0 + 1.3, minZ: CROP.minZ, maxZ: CROP.maxZ },
-				i % 2 ? darken(base, 0.85) : base,
+			box(0.05, 0.06, 0.9, tints[i % tints.length] as number, bx, y + 0.5, z),
+			box(0.4, 0.04, 0.04, IRON, bx, y + 0.88, z + 0.4),
+			box(0.12, 0.05, 0.2, IRON, bx, y + 0.72, z - 0.25),
+		);
+	}
+}
+
+function cafeTable(
+	out: BufferGeometry[],
+	x: number,
+	z: number,
+	y: number,
+	umbrella: number,
+): void {
+	out.push(
+		cyl(0.04, 0.04, 2.2, 5, 0x888888, x, y, z),
+		cyl(0.45, 0.45, 0.06, 10, 0xf4efe0, x, y + 0.7, z),
+		cone(1.1, 0.45, 8, umbrella, x, y + 2.0, z),
+		box(0.4, 0.45, 0.4, 0x8a5a3c, x - 0.8, y, z),
+		box(0.4, 0.45, 0.4, 0x8a5a3c, x + 0.8, y, z),
+	);
+}
+
+/** Market stall in a local frame (front +Z): counter, back cloth, produce, striped awning. */
+function stall(
+	out: BufferGeometry[],
+	x: number,
+	z: number,
+	ry: number,
+	awn: number,
+	goods: readonly number[],
+): void {
+	const parts: BufferGeometry[] = [
+		box(2.5, 2.2, 0.1, 0xd9c9a8, 0, 0, -0.7),
+		box(2.4, 0.95, 0.8, 0x8a5a3c, 0, 0, 0.1),
+		box(0.08, 2.1, 0.08, 0x5a5d62, -1.15, 0, 0.68),
+		box(0.08, 2.1, 0.08, 0x5a5d62, 1.15, 0, 0.68),
+	];
+	for (let i = 0; i < 4; i++) {
+		parts.push(
+			box(
+				0.5,
+				0.2,
+				0.42,
+				goods[i % goods.length] as number,
+				-0.9 + i * 0.6,
+				0.95,
+				0.1,
 			),
 		);
 	}
+	const slats: BufferGeometry[] = [];
+	for (let k = 0; k < 5; k++) {
+		slats.push(
+			box(0.5, 0.08, 1.7, k % 2 ? 0xf6f2e8 : awn, -1.0 + k * 0.5, 0, 0),
+		);
+	}
+	parts.push(place(merge(slats), { y: 2.15, z: 0.0, rx: 0.2 }));
+	out.push(place(merge(parts), { x, y: WALK_Y, z, ry }));
+}
+
+/** Zig-zag iron escape on a wall; `east` mounts on a +X face at x, else on a +Z face at z. */
+function ironEscape(
+	out: BufferGeometry[],
+	cx: number,
+	cz: number,
+	wall: number,
+	east: boolean,
+	floors: number,
+): void {
+	for (let f = 1; f < floors; f++) {
+		const y = f * FLOOR_H;
+		const sgn = f % 2 ? 1 : -1;
+		if (east) {
+			out.push(
+				box(0.9, 0.08, 3.2, IRON, wall + 0.45, y, cz),
+				box(0.05, 0.9, 3.2, IRON, wall + 0.9, y, cz),
+				box(0.9, 0.9, 0.05, IRON, wall + 0.45, y, cz - 1.6),
+				box(0.9, 0.9, 0.05, IRON, wall + 0.45, y, cz + 1.6),
+				place(box(0.5, 0.06, FLOOR_H * 1.2, IRON), {
+					x: wall + 0.45,
+					y: y + FLOOR_H / 2,
+					z: cz + sgn * 0.8,
+					rx: sgn * 0.75,
+				}),
+			);
+		} else {
+			out.push(
+				box(3.2, 0.08, 0.9, IRON, cx, y, wall + 0.45),
+				box(3.2, 0.9, 0.05, IRON, cx, y, wall + 0.9),
+				box(0.05, 0.9, 0.9, IRON, cx - 1.6, y, wall + 0.45),
+				box(0.05, 0.9, 0.9, IRON, cx + 1.6, y, wall + 0.45),
+				place(box(0.5, 0.06, FLOOR_H * 1.2, IRON), {
+					x: cx + sgn * 0.8,
+					y: y + FLOOR_H / 2,
+					z: wall + 0.45,
+					rx: -0.75,
+					ry: Math.PI / 2,
+				}),
+			);
+		}
+	}
+}
+
+function farm(ctx: BuildContext): void {
+	const out = ctx.statics;
+
 	out.push(patch(COWS, 0x88c874), patch(SHEEP, FIELD_B), patch(YARD, 0xb89f73));
 	fence(out, COWS);
 	fence(out, SHEEP);
+
+	for (let i = 0; i < 3; i++) {
+		out.push(
+			patch(
+				{
+					minX: -82.4 + i * 0.55,
+					maxX: -81.95 + i * 0.55,
+					minZ: 10,
+					maxZ: 21.5,
+				},
+				i % 2 ? darken(FIELD_B, 0.85) : FIELD_C,
+			),
+		);
+	}
 
 	out.push(
 		box(8, 5, 10, BARN_WALL, -76.5, Y, 16),
@@ -211,19 +347,14 @@ function farm(ctx: BuildContext): void {
 		box(1.2, 1, 1.6, 0xd9b94a, -71, FARM_Y, 22),
 		box(1.2, 1, 1.6, 0xd9b94a, -71, FARM_Y, 23.8),
 		box(1.2, 1, 1.6, 0xc9a63e, -71, FARM_Y + 1, 22.9),
+		// greenhouse
+		box(2.5, 0.5, 3.2, 0x8a7a66, -69.9, FARM_Y, 13.9),
+		box(2.3, 1.5, 3.0, 0xbfe4e6, -69.9, FARM_Y + 0.5, 13.9),
+		prism(2.5, 0.9, 3.2, 0xd8f0f2, -69.9, FARM_Y + 2.0, 13.9),
+		box(0.6, 0.5, 0.6, 0x4f8f4a, -69.9, FARM_Y + 0.5, 13.9),
+		// water trough
+		box(1.8, 0.4, 0.6, 0x7a7d82, -79.5, FARM_Y, 9.9),
 	);
-
-	for (const [x, z] of [
-		[-81.4, 10],
-		[-81.4, 15],
-		[-81.4, 20],
-		[-80.5, -14.2],
-		[-80.5, -2.3],
-	] as const) {
-		out.push(
-			place(roundTree(rng.range(0.8, 1), rng.pick(LEAVES)), { x, y: Y, z }),
-		);
-	}
 
 	const facing = new Vector3(
 		Math.sin(WINDMILL_FACING),
@@ -260,6 +391,118 @@ function oldTownRow(ctx: BuildContext): void {
 			{ floors: rng.int(3, 5), shops: false, upper: rng.pick(BRICK_TILES) },
 		);
 	}
+}
+
+/** Old-town market square (library on the north side, stalls, café terrace, crowd). */
+function market(ctx: BuildContext): void {
+	const out = ctx.statics;
+	const { rng } = ctx;
+
+	library(ctx, { x: -78.1, z: -22.5, w: 8.8, d: 5.4 }, { floors: 3 });
+	walkup(
+		ctx,
+		{ x: -70.9, z: -22.5, w: 5, d: 5.4 },
+		{ floors: 5, upper: TILE.brickBrown, shops: true },
+	);
+
+	out.push(
+		patch(
+			{ minX: -82.4, maxX: -68.2, minZ: -19.4, maxZ: -8.6 },
+			COURT,
+			PAVE_TOP,
+		),
+	);
+	const awnings = [0xb5544a, 0x2f6b4f, 0x2f5f8f, 0xd9a03c, 0x6b3f7a] as const;
+	const goods = [0xe85d5d, 0x8fd36b, 0xf7d64f, 0xf29e6b, 0x9b6bf2] as const;
+	for (const x of [-80.6, -77.4, -74.2, -71]) {
+		stall(out, x, -14.6, 0, rng.pick(awnings), goods);
+		stall(out, x, -10.4, Math.PI, rng.pick(awnings), goods);
+	}
+	for (const z of [-17, -9.2]) {
+		out.push(
+			place(roundTree(0.6, rng.pick(LEAVES)), { x: -81.9, y: WALK_Y, z }),
+			place(lamp(), { x: -68.8, y: WALK_Y, z }),
+		);
+	}
+	flowerBed(out, -75.4, -17.4, 3.2, 0.8, rng.pick(FLOWERS));
+	for (const x of [-72.4, -69.9])
+		cafeTable(out, x, -17.2, WALK_Y, rng.pick(awnings));
+
+	const spots: CrowdSpot[] = [];
+	for (let i = 0; i < 10; i++) {
+		spots.push({ x: -81 + i * 1.25, z: -12.5, y: WALK_Y });
+	}
+	for (let i = 0; i < 4; i++) {
+		spots.push({ x: -80.6 + i * 3.2, z: -13.2, y: WALK_Y, ry: 0 });
+		spots.push({ x: -80.6 + i * 3.2, z: -11.8, y: WALK_Y, ry: Math.PI });
+	}
+	spots.push(
+		{ x: -72.4, z: -17.2, y: WALK_Y },
+		{ x: -69.9, z: -17.2, y: WALK_Y },
+		{ x: -71.2, z: -16.8, y: WALK_Y },
+	);
+	createCrowd(ctx, spots, { count: 36, spread: 0.45 });
+
+	ctx.sidewalks.push(
+		new Polyline(
+			[new Vector3(-81.5, WALK_Y, -12.5), new Vector3(-68.6, WALK_Y, -12.5)],
+			false,
+		),
+	);
+}
+
+/** Brick student housing with iron fire escapes, a café with a terrace, bikes and students. */
+function studentBlock(ctx: BuildContext): void {
+	const out = ctx.statics;
+	const { rng } = ctx;
+
+	out.push(
+		patch(
+			{ minX: -82.4, maxX: -67.8, minZ: -0.3, maxZ: 2.0 },
+			PAVEMENT,
+			PAVE_TOP,
+		),
+	);
+	walkup(
+		ctx,
+		{ x: -78.4, z: -3.6, w: 8.2, d: 6.6 },
+		{ floors: 5, shops: false, upper: TILE.brickRed },
+	);
+	ironEscape(out, -78.4, -3.6, -74.3, true, 5);
+	ironEscape(out, -80.8, -3.6, -0.3, false, 5);
+	walkup(
+		ctx,
+		{ x: -70.6, z: -4.3, w: 5.2, d: 5.4 },
+		{ floors: 4, upper: TILE.stuccoCream, shops: true },
+	);
+
+	const awnings = [0xb5544a, 0x2f6b4f, 0x2f5f8f, 0xd9a03c] as const;
+	for (const x of [-72.2, -70.2, -68.4]) {
+		cafeTable(out, x, 0.8, WALK_Y, rng.pick(awnings));
+	}
+	bikeRack(out, -77.6, 1.4, 6, WALK_Y);
+	out.push(
+		place(bench(), { x: -80.8, y: WALK_Y, z: 1.6, ry: Math.PI }),
+		place(lamp(), { x: -74.6, y: WALK_Y, z: 1.6 }),
+	);
+
+	createCrowd(
+		ctx,
+		[
+			{ x: -79.8, z: 0.8, y: WALK_Y },
+			{ x: -75.8, z: 0.9, y: WALK_Y },
+			{ x: -72.2, z: 1.4, y: WALK_Y },
+			{ x: -70.2, z: 1.4, y: WALK_Y },
+			{ x: -68.6, z: 1.2, y: WALK_Y },
+		],
+		{ count: 12, spread: 0.6 },
+	);
+	ctx.sidewalks.push(
+		new Polyline(
+			[new Vector3(-82, WALK_Y, 0.6), new Vector3(-67.6, WALK_Y, 0.6)],
+			false,
+		),
+	);
 }
 
 function townHallBlock(ctx: BuildContext): void {
@@ -406,15 +649,48 @@ function campus(ctx: BuildContext): void {
 		place(lamp(), { x: -45.6, y: LAWN_Y, z: QUAD_AXIS_Z + 2.6 }),
 	);
 
+	campusHall(
+		ctx,
+		{ x: -64.8, z: ROTUNDA.z, w: 10, d: 4, ry: FACE_X },
+		{ floors: 3, tile: TILE.brickBrown, entrance: false },
+	);
 	for (const [x, z] of [
-		[-64.4, 9],
-		[-64.4, 17.4],
+		[-45.4, 7.1],
+		[-37.4, 7.1],
+		[-37.6, 18.4],
+		[-45.6, 18.4],
+	] as const) {
+		bikeRack(out, x, z, 4);
+	}
+	for (const x of [-44.1, -39.4]) {
+		out.push(
+			place(bench(), { x, y: LAWN_Y, z: 8.5 }),
+			place(bench(), { x, y: LAWN_Y, z: 17.2, ry: Math.PI }),
+		);
+	}
+	for (const z of [9.4, 16.9]) {
+		out.push(
+			box(0.7, 0.6, 1.6, 0x4f8f4a, -46.2, LAWN_Y, z),
+			box(0.7, 0.6, 1.6, 0x4f8f4a, -36.1, LAWN_Y, z),
+		);
+	}
+	flowerBed(out, -41.75, 7.6, 2.2, 0.8, ctx.rng.pick(FLOWERS));
+	flowerBed(out, -41.75, 18.4, 2.2, 0.8, ctx.rng.pick(FLOWERS));
+
+	for (const [x, z] of [
+		[-67.4, 8.8],
+		[-67.4, 12.5],
+		[-67.4, 17],
+		[-67.4, 20.2],
+		[-67.4, 24.4],
 		[-49.6, 3.6],
 		[-35.2, 6.4],
 		[-35.2, 20.6],
 		[-35.2, 24.4],
 		[-67.2, 1],
 		[-67.2, 6],
+		[-48.8, 8.2],
+		[-48.8, 18.6],
 	] as const) {
 		out.push(
 			place(roundTree(rng.range(0.7, 0.95), rng.pick(LEAVES)), { x, y: Y, z }),
@@ -429,6 +705,14 @@ function campus(ctx: BuildContext): void {
 		[-45.4, QUAD_AXIS_Z],
 		[-41.6, QUAD_AXIS_Z + 1.2],
 		[-40, 8.2],
+		[-45.6, 7.8],
+		[-37.2, 8.4],
+		[-45.8, 18.0],
+		[-37.4, 18.2],
+		[-41.7, 18.4],
+		[-48.2, 6.6],
+		[-48.2, 19.4],
+		[-64.2, 6.8],
 	];
 	createCrowd(
 		ctx,
@@ -460,6 +744,13 @@ function highStreet(ctx: BuildContext): void {
 	for (const x of [-64, -56, -48, -40]) {
 		out.push(place(lamp(), { x, y: WALK_Y, z: -2.2 }));
 	}
+	for (const x of [-60, -52, -44]) {
+		out.push(
+			box(1.2, 0.5, 0.5, 0x8a7a66, x, WALK_Y, -2.2),
+			box(1.0, 0.45, 0.3, ctx.rng.pick(LEAVES), x, WALK_Y + 0.5, -2.2),
+			place(bench(), { x: x + 2, y: WALK_Y, z: -0.7, ry: Math.PI }),
+		);
+	}
 	ctx.sidewalks.push(
 		new Polyline(
 			[new Vector3(-34.2, WALK_Y, -1.4), new Vector3(-66, WALK_Y, -1.4)],
@@ -471,6 +762,8 @@ function highStreet(ctx: BuildContext): void {
 export function buildRural(ctx: BuildContext): void {
 	farm(ctx);
 	oldTownRow(ctx);
+	market(ctx);
+	studentBlock(ctx);
 	townHallBlock(ctx);
 	highStreet(ctx);
 	campus(ctx);

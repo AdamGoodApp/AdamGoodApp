@@ -14,7 +14,8 @@ export default defineConfig({
 	forbidOnly: !!process.env.CI,
 	retries: process.env.CI ? 2 : 0,
 	reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
-	timeout: 60_000,
+	// Software (SwiftShader) rendering of the full city is slow; interactions wait on frames.
+	timeout: 120_000,
 	expect: { timeout: 20_000 },
 	use: { baseURL: "http://127.0.0.1:4173", trace: "retain-on-failure" },
 	webServer: {

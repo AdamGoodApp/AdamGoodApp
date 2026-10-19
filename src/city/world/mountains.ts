@@ -22,11 +22,11 @@ import {
 import { TILE } from "../kit/atlas";
 import { facadeBox } from "../kit/facade";
 import { CARS, ROCK, SNOW } from "../palette";
-import { car, pine } from "../prefabs";
+import { bench, car, pine } from "../prefabs";
 import { mulberry32 } from "../rng";
 import { type CrowdSpot, createCrowd } from "../sim/crowd";
 import { Polyline } from "../sim/path";
-import { createLift, createSkiers } from "../sim/ski";
+import { createGondola, createLift, createSkiers } from "../sim/ski";
 import type { BuildContext } from "./context";
 import { CELL_Y, SIDEWALK_Y } from "./layout";
 import { tintWhite } from "./tint";
@@ -301,6 +301,156 @@ function buildLift(statics: BufferGeometry[]): {
 	return { up: new Polyline(up, false), down: new Polyline(down, false) };
 }
 
+// --- Gondola + summit observation deck ---------------------------------------
+
+const GONDOLA_BASE = { x: -22.5, z: -50.6 };
+/** Apex of the western peak; the deck sits just above it. */
+const GONDOLA_TOP = { x: -16.5, z: -58 };
+const DECK_Y = 13.4;
+const DECK_SIZE = 5.6;
+const BASE_CABLE_Y = CELL_Y + 4.9;
+const TOP_CABLE_Y = DECK_Y + 2.8;
+const GONDOLA_GAP = 1.4;
+const GONDOLA_PYLONS = [0.36, 0.7] as const;
+const DECK_RAIL = 0xd9d4c8;
+
+function buildGondola(
+	ctx: BuildContext,
+	blocked: Footprint[],
+	spots: CrowdSpot[],
+): { up: Polyline; down: Polyline } {
+	const { statics } = ctx;
+	const { x: bx, z: bz } = GONDOLA_BASE;
+	const { x: tx, z: tz } = GONDOLA_TOP;
+	const dx = tx - bx;
+	const dz = tz - bz;
+	const len = Math.hypot(dx, dz);
+	const side = new Vector3(dz / len, 0, -dx / len);
+	const armYaw = Math.atan2(-side.z, side.x);
+	const up: Vector3[] = [];
+	const down: Vector3[] = [];
+	for (const t of [0, ...GONDOLA_PYLONS, 1]) {
+		const x = bx + dx * t;
+		const z = bz + dz * t;
+		const y = BASE_CABLE_Y + (TOP_CABLE_Y - BASE_CABLE_Y) * t;
+		up.push(
+			new Vector3(
+				x + (side.x * GONDOLA_GAP) / 2,
+				y,
+				z + (side.z * GONDOLA_GAP) / 2,
+			),
+		);
+		down.push(
+			new Vector3(
+				x - (side.x * GONDOLA_GAP) / 2,
+				y,
+				z - (side.z * GONDOLA_GAP) / 2,
+			),
+		);
+		if (t === 0 || t === 1) continue;
+		const base = Math.max(CELL_Y, terrainHeight(x, z));
+		const top = y - 0.15;
+		statics.push(
+			cyl(0.22, 0.34, top - base, 6, 0x555555, x, base, z),
+			box(GONDOLA_GAP + 0.9, 0.12, 0.16, 0x555555, x, top - 0.05, z, armYaw),
+		);
+	}
+	for (let i = 0; i < up.length - 1; i++) {
+		statics.push(beam(up[i] as Vector3, up[i + 1] as Vector3, 0.07, 0x333333));
+		statics.push(
+			beam(down[i] as Vector3, down[i + 1] as Vector3, 0.07, 0x333333),
+		);
+	}
+
+	// Valley station with a loading platform on its camera-facing side.
+	const y = CELL_Y;
+	statics.push(
+		box(3.4, 4.2, 3.0, 0x7d858c, bx, y, bz),
+		box(3.9, 0.3, 3.5, 0xe8463c, bx, y + 4.2, bz),
+		box(3.7, 0.12, 3.3, SNOW, bx, y + 4.5, bz),
+		box(1.4, 0.6, 1.4, 0x444a52, bx, y + 4.62, bz),
+		glow(box(2.4, 0.4, 0.1, 0x4cf0ff, bx, y + 2.6, bz + 1.55), GLOW.always),
+		box(1.1, 2.0, 0.08, 0x2b3a4a, bx - 0.7, y, bz + 1.54),
+		box(3.4, 0.3, 2.2, PAVED, bx, y, bz + 2.5),
+	);
+	blocked.push({ x: bx, z: bz + 0.6, hx: 2.1, hz: 3.1 });
+	for (const [sx, sz] of [
+		[-0.8, 2.4],
+		[0.4, 2.7],
+		[1.1, 2.2],
+	] as const) {
+		spots.push({ x: bx + sx, z: bz + sz, y: y + 0.3 });
+	}
+
+	// Summit observation deck on stilts over the apex, with the top station on it.
+	const half = DECK_SIZE / 2;
+	for (const sx of [-1, 1]) {
+		for (const sz of [-1, 1]) {
+			const lx = tx + sx * (half - 0.3);
+			const lz = tz + sz * (half - 0.3);
+			const base = Math.max(CELL_Y, terrainHeight(lx, lz)) - 0.4;
+			statics.push(
+				cyl(0.22, 0.3, DECK_Y - 0.3 - base, 6, 0x5a3a22, lx, base, lz),
+			);
+		}
+	}
+	statics.push(
+		box(DECK_SIZE, 0.3, DECK_SIZE, 0x8a5a3c, tx, DECK_Y - 0.3, tz),
+		box(2.8, 2.8, 2.6, 0x6d7f93, tx, DECK_Y, tz),
+		box(3.2, 0.25, 3.0, 0xe8463c, tx, DECK_Y + 2.8, tz),
+		box(3.0, 0.12, 2.8, SNOW, tx, DECK_Y + 3.05, tz),
+		box(1.2, 0.5, 1.2, 0x444a52, tx, DECK_Y + 3.17, tz),
+		glow(
+			box(1.6, 0.35, 0.08, 0x4cf0ff, tx, DECK_Y + 1.6, tz + 1.34),
+			GLOW.always,
+		),
+	);
+	const edge = half - 0.12;
+	for (const s of [-1, 1]) {
+		statics.push(
+			box(DECK_SIZE, 0.07, 0.07, DECK_RAIL, tx, DECK_Y + 0.95, tz + s * edge),
+			box(0.07, 0.07, DECK_SIZE, DECK_RAIL, tx + s * edge, DECK_Y + 0.95, tz),
+		);
+		for (let k = 0; k < 5; k++) {
+			const p = -edge + (k * 2 * edge) / 4;
+			statics.push(
+				box(0.07, 1.0, 0.07, DECK_RAIL, tx + p, DECK_Y, tz + s * edge),
+				box(0.07, 1.0, 0.07, DECK_RAIL, tx + s * edge, DECK_Y, tz + p),
+			);
+		}
+	}
+	statics.push(
+		cyl(0.05, 0.05, 3.6, 6, 0xdddddd, tx - 2.2, DECK_Y, tz - 2.2),
+		box(0.9, 0.55, 0.04, 0xe8463c, tx - 1.7, DECK_Y + 2.9, tz - 2.2),
+		place(bench(), { x: tx + 2.05, y: DECK_Y, z: tz - 0.4, ry: Math.PI / 2 }),
+		place(bench(), { x: tx + 0.5, y: DECK_Y, z: tz + 2.05, ry: 0 }),
+	);
+	for (const [sx, sz] of [
+		[1.9, 1.9],
+		[-1.9, 1.9],
+	] as const) {
+		statics.push(
+			cyl(0.05, 0.07, 1.2, 6, 0x444444, tx + sx, DECK_Y, tz + sz),
+			place(box(0.18, 0.18, 0.7, 0xe8463c, 0, -0.09, 0), {
+				rx: -0.25,
+				x: tx + sx,
+				y: DECK_Y + 1.3,
+				z: tz + sz,
+			}),
+		);
+	}
+	for (const [sx, sz] of [
+		[0.9, 1.9],
+		[2.0, 0.9],
+		[-0.8, 1.9],
+		[1.3, -1.4],
+	] as const) {
+		spots.push({ x: tx + sx, z: tz + sz, y: DECK_Y + 0.02 });
+	}
+
+	return { up: new Polyline(up, false), down: new Polyline(down, false) };
+}
+
 // --- Ski village -----------------------------------------------------------
 
 const VILLAGE_Z0 = -48;
@@ -489,7 +639,6 @@ function buildParking(ctx: BuildContext): CrowdSpot[] {
 	const spots: CrowdSpot[] = [];
 	for (const [row, lz] of [-37.7, -43.9].entries()) {
 		for (let bay = 0; bay < 3; bay++) {
-			if (rng() < 0.2) continue;
 			const bx = x - hx + 1.3 + bay * 2.4;
 			statics.push(
 				place(tintWhite(car(), rng.pick(CARS)), {
@@ -533,6 +682,20 @@ function buildVillage(ctx: BuildContext, blocked: Footprint[]): CrowdSpot[] {
 		[6.3, 6.4, 2],
 	];
 	for (const [x, w, floors] of rowB) chalet(ctx, blocked, x, -45, w, 5, floors);
+	// Small cabins on the southern edge of the village, below the western peak.
+	for (const [x, w] of [
+		[-17.4, 3.6],
+		[-13, 3.8],
+		[-8.6, 3.6],
+		[22.6, 3.6],
+	] as const) {
+		chalet(ctx, blocked, x, x > 0 ? -50.4 : -49.9, w, 3.2, 1);
+		spots.push({
+			x: x - 0.6,
+			z: (x > 0 ? -50.4 : -49.9) + 2.4,
+			y: CELL_Y + 0.05,
+		});
+	}
 	lodge(ctx, blocked, 6.7, -38.5, 8.2, 6.8);
 	chalet(ctx, blocked, 18.6, -38.5, 3.6, 4, 1);
 	statics.push(
@@ -620,44 +783,115 @@ function scatterPines(
 	ctx: BuildContext,
 	path: Polyline,
 	blocked: readonly Footprint[],
+	lines: readonly (readonly [number, number, number, number])[],
 ): void {
 	const { rng, statics } = ctx;
 	const pines: { x: number; z: number }[] = [];
-	for (let attempt = 0; attempt < 7000 && pines.length < 140; attempt++) {
-		const x = rng.range(-23.8, 23.8);
-		const z = rng.range(-80.5, -36);
-		const h = terrainHeight(x, z);
-		if (h >= 3) continue;
-		if (blocked.some((r) => rectDistance(x, z, r) < 0.6)) continue;
+	const clear = (x: number, z: number, gap: number): boolean => {
+		if (blocked.some((r) => rectDistance(x, z, r) < 0.6)) return false;
 		if (
-			segmentDistance(x, z, LIFT_BASE.x, LIFT_BASE.z, LIFT_TOP.x, LIFT_TOP.z) <
-			3
+			lines.some(
+				([ax, az, bx, bz]) => segmentDistance(x, z, ax, az, bx, bz) < 3,
+			)
 		)
-			continue;
+			return false;
 		let near = Number.POSITIVE_INFINITY;
 		for (const p of path.points)
 			near = Math.min(near, Math.hypot(p.x - x, p.z - z));
-		if (near < 3) continue;
-		if (pines.some((q) => Math.hypot(q.x - x, q.z - z) < 1.9)) continue;
-		pines.push({ x, z });
-		statics.push(
-			place(pine(rng.range(0.8, 1.4)), { x, y: Math.max(h, CELL_Y), z }),
-		);
+		if (near < 3) return false;
+		return !pines.some((q) => Math.hypot(q.x - x, q.z - z) < gap);
+	};
+	// Dense forest on the valley floor, then thinner and smaller up the lower slopes.
+	const passes = [
+		{ cap: 175, lo: 0, hi: 3, gap: 1.75, small: 0.8, big: 1.4 },
+		{ cap: 250, lo: 3, hi: 9, gap: 2.1, small: 0.6, big: 1.0 },
+	] as const;
+	for (const { cap, lo, hi, gap, small, big } of passes) {
+		for (let attempt = 0; attempt < 9000 && pines.length < cap; attempt++) {
+			const x = rng.range(-23.8, 23.8);
+			const z = rng.range(-80.5, -36);
+			const h = terrainHeight(x, z);
+			if (h < lo || h >= hi) continue;
+			if (!clear(x, z, gap)) continue;
+			pines.push({ x, z });
+			statics.push(
+				place(pine(rng.range(small, big)), {
+					x,
+					y: h > 0 ? h - 0.15 : CELL_Y,
+					z,
+				}),
+			);
+		}
 	}
+}
+
+/** Alternating red/blue slalom gates down the ski run, just clear of the skiers' line. */
+function slalomGates(statics: BufferGeometry[], path: Polyline): void {
+	const pts = path.points;
+	for (let i = 8; i < pts.length - 6; i += 4) {
+		const a = pts[i] as Vector3;
+		const b = pts[i + 1] as Vector3;
+		const len = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+		const tx = (b.x - a.x) / len;
+		const tz = (b.z - a.z) / len;
+		const hex = (i / 4) % 2 ? 0x3b7dd8 : 0xe8463c;
+		for (const side of [-1, 1]) {
+			const x = a.x - tz * side * 1.5;
+			const z = a.z + tx * side * 1.5;
+			const y = Math.max(CELL_Y, terrainHeight(x, z));
+			statics.push(
+				box(0.06, 1.9, 0.06, 0x333333, x, y - 0.15, z),
+				box(0.7, 0.5, 0.04, hex, x, y + 1.2, z, Math.atan2(tx, tz)),
+			);
+		}
+	}
+}
+
+/** Summit flag: a pole and a red pennant planted at a peak's apex. */
+function summitFlag(statics: BufferGeometry[], p: Peak, scale: number): void {
+	statics.push(
+		cyl(
+			0.06 * scale,
+			0.07 * scale,
+			3.2 * scale,
+			6,
+			0xdddddd,
+			p.x,
+			p.h - 0.2,
+			p.z,
+		),
+		box(
+			1.1 * scale,
+			0.7 * scale,
+			0.05 * scale,
+			0xe8463c,
+			p.x + 0.6 * scale,
+			p.h + 2.3 * scale,
+			p.z,
+		),
+	);
 }
 
 export function buildMountains(ctx: BuildContext): void {
 	const out = ctx.statics;
 
 	for (const p of PEAKS) out.push(peakGeometry(p));
+	summitFlag(out, PEAKS[0] as Peak, 1.5);
+	summitFlag(out, PEAKS[2] as Peak, 1);
 
 	const path = skiPath();
+	slalomGates(out, path);
 	const lift = buildLift(out);
 	const blocked: Footprint[] = [];
 	const spots = buildVillage(ctx, blocked);
-	scatterPines(ctx, path, blocked);
+	const gondola = buildGondola(ctx, blocked, spots);
+	scatterPines(ctx, path, blocked, [
+		[LIFT_BASE.x, LIFT_BASE.z, LIFT_TOP.x, LIFT_TOP.z],
+		[GONDOLA_BASE.x, GONDOLA_BASE.z, GONDOLA_TOP.x, GONDOLA_TOP.z],
+	]);
 
 	createSkiers(ctx, path);
 	createLift(ctx, lift.up, lift.down);
-	createCrowd(ctx, spots, { count: 34, spread: 0.45 });
+	createGondola(ctx, gondola.up, gondola.down);
+	createCrowd(ctx, spots, { count: 46, spread: 0.45 });
 }

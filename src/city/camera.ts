@@ -16,7 +16,12 @@ const UP_ON_GROUND = new Vector3(-1, 0, -1)
 	.normalize()
 	.multiplyScalar(Math.sqrt(3));
 const GROUND = new Plane(new Vector3(0, 1, 0), 0);
-const PAN_LIMIT = 120;
+/**
+ * Half-extent of the built city in view units (screen-right u, screen-up v);
+ * matches the outskirts culling in world/outskirts.ts. The view never leaves it.
+ */
+const BUILT_U = 215;
+const BUILT_V = 115;
 
 export type CameraMode = "fixed" | "pannable";
 
@@ -66,7 +71,6 @@ export class IsoCamera {
 			maxY = Math.max(maxY, Math.abs(v.y));
 		}
 		this.target.copy(saved);
-		this.reposition();
 		const margin = 1.0;
 		if (aspect >= maxX / maxY) {
 			this.fitHalfH = maxY * margin;
@@ -76,6 +80,7 @@ export class IsoCamera {
 			this.fitHalfH = this.fitHalfW / aspect;
 		}
 		this.applyFrustum();
+		this.clampTarget();
 	}
 
 	private applyFrustum(): void {
@@ -92,15 +97,31 @@ export class IsoCamera {
 		const sx = (-dxPx * (2 * this.fitHalfW)) / this.zoomFactor / width;
 		const sy = (dyPx * (2 * this.fitHalfH)) / this.zoomFactor / height;
 		this.target.addScaledVector(RIGHT, sx).addScaledVector(UP_ON_GROUND, sy);
-		this.target.x = Math.min(PAN_LIMIT, Math.max(-PAN_LIMIT, this.target.x));
-		this.target.z = Math.min(PAN_LIMIT, Math.max(-PAN_LIMIT, this.target.z));
-		this.target.y = 0;
-		this.reposition();
+		this.clampTarget();
 	}
 
 	zoomBy(factor: number): void {
-		this.zoomFactor = Math.min(3.5, Math.max(1, this.zoomFactor * factor));
+		const min = Math.max(1, this.fitHalfW / BUILT_U, this.fitHalfH / BUILT_V);
+		this.zoomFactor = Math.min(3.5, Math.max(min, this.zoomFactor * factor));
 		this.applyFrustum();
+		this.clampTarget();
+	}
+
+	/** Keep the whole view inside the built city (in view space: u right, v up). */
+	private clampTarget(): void {
+		const hw = this.fitHalfW / this.zoomFactor;
+		const hh = this.fitHalfH / this.zoomFactor;
+		const t = this.target;
+		const limU = Math.max(0, BUILT_U - hw);
+		const limV = Math.max(0, BUILT_V - hh);
+		const u = Math.min(limU, Math.max(-limU, (t.x - t.z) / Math.SQRT2));
+		const v = Math.min(limV, Math.max(-limV, -(t.x + t.z) / Math.sqrt(6)));
+		t.set(
+			(u * Math.SQRT2 - v * Math.sqrt(6)) / 2,
+			0,
+			(-v * Math.sqrt(6) - u * Math.SQRT2) / 2,
+		);
+		this.reposition();
 	}
 
 	screenPoint(world: Vector3, width: number, height: number) {

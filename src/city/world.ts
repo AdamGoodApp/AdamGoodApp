@@ -18,6 +18,11 @@ export interface CityWorldOptions {
 	tier: GpuTier;
 	mode: CameraMode;
 	density: number;
+	/**
+	 * Cheap rendering for software rasterisers (automated tests): small shadow map,
+	 * no MSAA, no bloom/tilt-shift, pixel ratio 1. The simulation is unchanged.
+	 */
+	lite: boolean;
 	reducedMotion: boolean;
 	timeMode: TimeMode;
 	onHover(id: ZoneId | null): void;
@@ -82,7 +87,7 @@ export class CityWorld {
 		sc.bottom = -210;
 		sc.near = 1;
 		sc.far = 400;
-		const mapSize = o.density < 1 ? 2048 : 4096;
+		const mapSize = o.lite ? 1024 : o.density < 1 ? 2048 : 4096;
 		sun.shadow.mapSize.set(mapSize, mapSize);
 		sun.shadow.bias = -0.0004;
 		sun.shadow.normalBias = 0.03;
@@ -94,7 +99,8 @@ export class CityWorld {
 
 		this.camera = new IsoCamera(o.mode);
 		this.pipeline = createPipeline(renderer, this.scene, this.camera.camera, {
-			tiltShift: o.density >= 1,
+			tiltShift: o.density >= 1 && !o.lite,
+			lite: o.lite,
 		});
 		this.highlights = new ZoneHighlights(this.scene);
 
@@ -191,7 +197,9 @@ export class CityWorld {
 		const h = c.clientHeight;
 		if (!w || !h) return;
 		this.renderer.setPixelRatio(
-			Math.min(window.devicePixelRatio, this.o.density < 1 ? 1.5 : 2),
+			this.o.lite
+				? 1
+				: Math.min(window.devicePixelRatio, this.o.density < 1 ? 1.5 : 2),
 		);
 		this.renderer.setSize(w, h, false);
 		this.camera.fit(w / h);

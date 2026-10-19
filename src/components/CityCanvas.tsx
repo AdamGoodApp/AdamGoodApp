@@ -57,6 +57,7 @@ function Canvas({ worldRef }: { worldRef: RefObject<CityWorld | null> }) {
 				tier,
 				mode: isDesktop ? "fixed" : "pannable",
 				density: isDesktop ? 1 : 0.5,
+				lite: readParam("e2e") === "1",
 				reducedMotion: prefersReducedMotion(),
 				timeMode: uiStore.state.timeMode,
 				onHover: (hovered) =>

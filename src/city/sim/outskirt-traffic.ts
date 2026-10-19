@@ -8,76 +8,82 @@ import { OUTSKIRT_SEGMENTS, type Segment } from "../world/outskirts";
 import { type Agent, Pool, scaled } from "./agent";
 
 const LANE = 1.25;
-/** Cars in one lane keep this spacing; lanes flow at one speed so they never close up. */
+/** Cars on one street keep this spacing; a street flows at one speed so they never close up. */
 const SPACING = 14;
+/** Metres over which a car swings across into the opposite lane at a street end. */
+const TURN = 6;
 
-interface Lane {
+interface Loop {
 	seg: Segment;
-	dir: 1 | -1;
 	speed: number;
 	first: number;
 	count: number;
+	offset: number;
 }
 
 /**
- * Through-traffic on the outskirt streets: every lane is a conveyor of evenly
- * spaced cars at one speed that wraps from the end of its street back to the
- * start. Cheap (no junction logic) and convincing at the edges of the screen.
+ * Through-traffic on the outskirt streets. Each street is one loop: cars drive
+ * out on the right-hand lane, U-turn at the end and come back on the other
+ * lane, evenly spaced at one speed, so nobody pops in or out of view and no
+ * junction logic is needed.
  */
 export function createOutskirtTraffic(ctx: BuildContext): void {
-	const lanes: Lane[] = [];
+	const loops: Loop[] = [];
 	let total = 0;
 	const budget = scaled(90, ctx.density);
 	const length = OUTSKIRT_SEGMENTS.reduce((sum, s) => sum + (s.to - s.from), 0);
 	for (const seg of OUTSKIRT_SEGMENTS) {
 		const len = seg.to - seg.from;
-		for (const dir of [1, -1] as const) {
-			const want = Math.min(
-				Math.floor(len / SPACING),
-				Math.round((budget * len) / length / 2),
-			);
-			if (want < 1) continue;
-			lanes.push({
-				seg,
-				dir,
-				speed: ctx.rng.range(8, 12),
-				first: total,
-				count: want,
-			});
-			total += want;
-		}
+		const count = Math.min(
+			Math.floor((2 * len) / SPACING),
+			Math.round((budget * len) / length),
+		);
+		if (count < 1) continue;
+		loops.push({
+			seg,
+			speed: ctx.rng.range(8, 12),
+			first: total,
+			count,
+			offset: ctx.rng.range(0, 2 * len),
+		});
+		total += count;
 	}
 	if (total === 0) return;
 	const pool = new Pool(car(), MAT_INSTANCED, total, { shadow: true });
 	for (let i = 0; i < total; i++) pool.color(i, ctx.rng.pick(CARS));
 	ctx.group.add(pool.mesh);
-	const offsets = lanes.map(() => ctx.rng.range(0, SPACING));
 	const p = new Vector3();
 	const agent: Agent = {
 		update(_dt, t) {
-			lanes.forEach((lane, li) => {
-				const { seg, dir, speed, first, count } = lane;
+			for (const { seg, speed, first, count, offset } of loops) {
 				const len = seg.to - seg.from;
-				const gap = len / count;
-				const yaw =
-					seg.axis === "x"
-						? dir > 0
-							? 0
-							: Math.PI
-						: dir > 0
-							? Math.PI / 2
-							: -Math.PI / 2;
+				const loop = 2 * len;
 				for (let k = 0; k < count; k++) {
 					const s =
-						(((t * speed + (offsets[li] as number) + k * gap) % len) + len) %
-						len;
-					const along = dir > 0 ? seg.from + s : seg.to - s;
-					// Right-hand traffic: +Z traffic keeps to −X, +X traffic keeps to +Z.
-					if (seg.axis === "x") p.set(seg.at - dir * LANE, ROAD_Y, along);
-					else p.set(along, ROAD_Y, seg.at + dir * LANE);
-					pool.write(first + k, p, yaw);
+						(((t * speed + offset + (k * loop) / count) % loop) + loop) % loop;
+					const outbound = s < len;
+					const d = outbound ? s : s - len;
+					const along = outbound ? seg.from + d : seg.to - d;
+					// Lane: +1 = outbound right-hand lane, −1 = return lane; swing across near the ends.
+					const toEnd = len - d;
+					const swing = toEnd < TURN ? toEnd / TURN : 1;
+					const side =
+						(outbound ? 1 : -1) * swing + (outbound ? -1 : 1) * (1 - swing);
+					const lane = side * LANE;
+					let yaw: number;
+					if (seg.axis === "x") {
+						// Outbound runs +Z and keeps to −X.
+						p.set(seg.at - lane, ROAD_Y, along);
+						yaw = outbound ? 0 : Math.PI;
+					} else {
+						// Outbound runs +X and keeps to +Z.
+						p.set(along, ROAD_Y, seg.at + lane);
+						yaw = outbound ? Math.PI / 2 : -Math.PI / 2;
+					}
+					// U-turn to the left over the last TURN metres (yaw rises by π).
+					pool.write(first + k, p, yaw + (1 - swing) * Math.PI);
 				}
-			});
+			}
 			pool.commit();
 		},
 	};

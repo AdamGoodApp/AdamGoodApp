@@ -30,6 +30,14 @@ export function hillHeight(u: number): number {
 	return HILL_HEIGHT * Math.sqrt(Math.max(0, 1 - f * f));
 }
 
+/** Analytic height of the sign hill's surface at world (x, z); 0 off the hill. */
+export function hillSurface(x: number, z: number): number {
+	const u = (x - z) / Math.SQRT2;
+	const v = (x + z) / Math.SQRT2;
+	const k = 1 - (u / HILL_HALF_LENGTH) ** 2 - (v / HILL_HALF_WIDTH) ** 2;
+	return k > 0 ? HILL_HEIGHT * Math.sqrt(k) : 0;
+}
+
 export function buildSign(ctx: BuildContext): void {
 	const total = SIGN_TEXT.length * PITCH * CUBE;
 	const parts = [];

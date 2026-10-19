@@ -383,3 +383,48 @@ export function campusHall(
 	}
 	emit(ctx, lot, statics, facades);
 }
+
+/**
+ * Stone public library: tall arched-window facade, wide columned portico with
+ * pediment, copper hip roof and a reading-room dome behind the ridge.
+ * Requires w ≥ d; front steps reach z ≈ d/2 + 2.7.
+ */
+export function library(
+	ctx: BuildContext,
+	lot: Placement & { w: number; d: number },
+	o: { floors?: number } = {},
+): void {
+	const { rng } = ctx;
+	const { w, d } = lot;
+	const floors = o.floors ?? 3;
+	const h = floors * FLOOR_H;
+	const facades = [
+		facadeBox(w, d, h, {
+			upper: TILE.stoneBeige,
+			ground: TILE.stoneBeige,
+			seed: rng.int(1, 9999),
+		}),
+	];
+	const roofH = Math.min(2.2, 1.4 + d * 0.1);
+	const statics: BufferGeometry[] = [
+		box(w + 0.4, 0.7, d + 0.4, STEP),
+		box(w + 0.25, 0.25, d + 0.25, TRIM, 0, FLOOR_H - 0.1),
+		box(w + 0.6, 0.45, d + 0.6, TRIM, 0, h - 0.15),
+		hipRoof(w + 1.2, d + 1.2, roofH, GREEN_ROOF, h + 0.3),
+		dome(d * 0.28, 0.9, 12, TRIM, h + 0.3),
+		dome(d * 0.2, 1.1, 10, GREEN_ROOF, h + 0.3 + d * 0.25),
+		cyl(0.05, 0.05, 0.8, 5, GOLD, 0, h + 0.3 + d * 0.25 + d * 0.22),
+		box(1.5, 2.4, 0.12, DOOR, 0, 0.7, d / 2 + 0.03),
+		box(w * 0.5, 0.5, 0.1, BRICK, 0, h - 1.1, d / 2 + 0.06),
+	];
+	portico(statics, {
+		width: Math.min(w - 1.5, 6.4),
+		z0: d / 2,
+		depth: 1.8,
+		columns: 4,
+		height: 3.4,
+		floor: 0.5,
+		pediment: 1.4,
+	});
+	emit(ctx, lot, statics, facades);
+}

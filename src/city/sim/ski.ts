@@ -1,5 +1,6 @@
-import { MathUtils, Vector3 } from "three";
-import { MAT_INSTANCED } from "../geometry";
+import { type BufferGeometry, MathUtils, Vector3 } from "three";
+import { box, MAT_INSTANCED, merge } from "../geometry";
+import { WHITE } from "../palette";
 import { liftChair, skier, snowboarder } from "../prefabs";
 import type { BuildContext } from "../world/context";
 import { type Agent, Pool, scaled } from "./agent";
@@ -14,6 +15,9 @@ const LOOK_AHEAD = 1;
 const LIFT_SPEED = 2;
 /** The chair's hanger tops out 2.9 m above its seat origin. */
 const CHAIR_DROP = 2.9;
+
+const GONDOLA_SPEED = 2.6;
+const CABIN_COLOURS = [0xe8463c, 0x3b7dd8, 0xf2c94c, 0x58c27a] as const;
 
 interface Rider {
 	readonly pool: Pool;
@@ -109,6 +113,8 @@ class LiftAgent implements Agent {
 		private readonly pool: Pool,
 		private readonly up: Polyline,
 		private readonly down: Polyline,
+		private readonly speed: number,
+		private readonly drop: number,
 	) {
 		this.round = up.length * 2;
 	}
@@ -117,7 +123,7 @@ class LiftAgent implements Agent {
 		const { pool, up, down, round } = this;
 		const spacing = round / pool.count;
 		for (let i = 0; i < pool.count; i++) {
-			const u = (t * LIFT_SPEED + i * spacing) % round;
+			const u = (t * this.speed + i * spacing) % round;
 			let yaw: number;
 			if (u < up.length) {
 				up.pointAt(u, this.pos);
@@ -129,7 +135,7 @@ class LiftAgent implements Agent {
 				down.tangentAt(s, this.dir);
 				yaw = Math.atan2(-this.dir.x, -this.dir.z);
 			}
-			this.pos.y -= CHAIR_DROP;
+			this.pos.y -= this.drop;
 			pool.write(i, this.pos, yaw);
 		}
 		pool.commit();
@@ -144,7 +150,34 @@ export function createLift(
 ): void {
 	const pool = new Pool(liftChair(), MAT_INSTANCED, scaled(14, ctx.density));
 	ctx.group.add(pool.mesh);
-	const agent = new LiftAgent(pool, up, down);
+	const agent = new LiftAgent(pool, up, down, LIFT_SPEED, CHAIR_DROP);
+	agent.update(0, 0);
+	ctx.agents.push(agent);
+}
+
+/** Cable car: roof, hanger and a windowed cabin; the origin is the cable attachment point. */
+function cableCar(): BufferGeometry {
+	return merge([
+		box(0.08, 0.9, 0.08, 0x444444, 0, -0.9, 0),
+		box(1.7, 0.14, 1.4, 0x444444, 0, -1.04, 0),
+		box(1.5, 1.2, 1.2, WHITE, 0, -2.24, 0),
+		box(1.54, 0.5, 1.24, 0x2b3a4a, 0, -1.9, 0),
+		box(1.6, 0.1, 1.3, 0x444444, 0, -2.34, 0),
+	]);
+}
+
+/** Gondola cabins shuttle along the `up` cable and return on the `down` cable. */
+export function createGondola(
+	ctx: BuildContext,
+	up: Polyline,
+	down: Polyline,
+): void {
+	const pool = new Pool(cableCar(), MAT_INSTANCED, scaled(6, ctx.density));
+	for (let i = 0; i < pool.count; i++) {
+		pool.color(i, CABIN_COLOURS[i % CABIN_COLOURS.length] as number);
+	}
+	ctx.group.add(pool.mesh);
+	const agent = new LiftAgent(pool, up, down, GONDOLA_SPEED, 0.05);
 	agent.update(0, 0);
 	ctx.agents.push(agent);
 }

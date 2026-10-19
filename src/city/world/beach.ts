@@ -32,6 +32,7 @@ import {
 	SHIRTS,
 } from "../palette";
 import { bench, lamp, palm, personLying } from "../prefabs";
+import { mulberry32, type Rng, WORLD_SEED } from "../rng";
 import type { Agent } from "../sim/agent";
 import { createBoats } from "../sim/boats";
 import { type CrowdSpot, createCrowd } from "../sim/crowd";
@@ -89,6 +90,21 @@ const BLOCKED: readonly (readonly [number, number, number, number])[] = [
 	[-83, -78, 59, 65],
 	[-83, -78, 74, 80],
 	[-65, -59, 63, 69],
+	// Added beach life: resort pool, soccer pitch, surf school, kayaks, lounger rows, castles.
+	[-61.9, -51.8, 51.5, 58.9],
+	[-77.7, -65.3, 59.3, 67.7],
+	[-81.8, -78.2, 66.8, 71],
+	[-78.8, -77, 70.6, 74.2],
+	[-81.8, -79.5, 52.2, 59.6],
+	[-79, -63, 56.2, 58.2],
+	[-76.5, -65.5, 68.2, 70.6],
+	[-58, -51.7, 66.4, 71.8],
+	[-63.6, -61.2, 59.7, 62.1],
+	[-58.2, -55.8, 59.2, 61.6],
+	[-77, -74.6, 72.8, 75.2],
+	[-77, -74.6, 78, 80.4],
+	[-71.2, -68.8, 80.4, 82.6],
+	[-61.7, -59.3, 80.4, 82.6],
 ];
 
 const PIER_Z = 70;
@@ -575,7 +591,7 @@ function buildSand(ctx: BuildContext): CrowdSpot[] {
 	}
 
 	const spaced: { x: number; z: number }[] = [];
-	for (let attempt = 0; attempt < 4000 && spaced.length < 34; attempt++) {
+	for (let attempt = 0; attempt < 4000 && spaced.length < 38; attempt++) {
 		const x = rng.range(-81, -51.5);
 		const z = rng.range(51.5, 81.5);
 		if (
@@ -584,7 +600,7 @@ function buildSand(ctx: BuildContext): CrowdSpot[] {
 			)
 		)
 			continue;
-		if (spaced.some((p) => Math.hypot(p.x - x, p.z - z) < 2.7)) continue;
+		if (spaced.some((p) => Math.hypot(p.x - x, p.z - z) < 2.5)) continue;
 		spaced.push({ x, z });
 	}
 
@@ -598,7 +614,7 @@ function buildSand(ctx: BuildContext): CrowdSpot[] {
 				ry,
 			}),
 		);
-		if (i < 26) {
+		if (i < 30) {
 			const body = tintWhite(personLying(), rng.pick(SHIRTS));
 			statics.push(place(body, { x, y: CELL_Y + 0.05, z, ry }));
 		} else {
@@ -612,6 +628,384 @@ function buildSand(ctx: BuildContext): CrowdSpot[] {
 			cone(1.2, 0.5, 8, rng.pick(BRIGHTS), px, CELL_Y + 1.8, pz),
 		);
 	});
+	return spots;
+}
+
+/** Sun lounger, head end toward -Z (to match `personLying`), origin on the sand. */
+function lounger(x: number, z: number, cushion: number): BufferGeometry[] {
+	return [
+		box(0.66, 0.2, 1.25, cushion, x, CELL_Y, z + 0.3),
+		place(box(0.66, 0.1, 0.8, cushion), {
+			rx: 0.6,
+			x,
+			y: CELL_Y + 0.28,
+			z: z - 0.45,
+		}),
+		box(0.5, 0.04, 0.06, 0xf4f4f4, x, CELL_Y + 0.2, z + 0.85),
+	];
+}
+
+function parasol(
+	x: number,
+	z: number,
+	y: number,
+	col: number,
+): BufferGeometry[] {
+	return [
+		cyl(0.04, 0.04, 2, 6, 0xeeeeee, x, y, z),
+		cone(1.25, 0.55, 8, col, x, y + 2, z),
+	];
+}
+
+/** A row of loungers at `z0` with a person lying on two of every three and a parasol per pair. */
+function loungerRow(
+	ctx: BuildContext,
+	rnd: Rng,
+	xs: readonly number[],
+	z0: number,
+): void {
+	xs.forEach((x, i) => {
+		ctx.statics.push(...lounger(x, z0, rnd.pick(BRIGHTS)));
+		if (i % 3 !== 2) {
+			ctx.statics.push(
+				place(tintWhite(personLying(), rnd.pick(SHIRTS)), {
+					x,
+					y: CELL_Y + 0.2,
+					z: z0 + 0.25,
+				}),
+			);
+		}
+		if (i % 2 === 1) {
+			const prev = xs[i - 1] as number;
+			ctx.statics.push(
+				...parasol((x + prev) / 2, z0 - 0.45, CELL_Y, rnd.pick(BRIGHTS)),
+			);
+		}
+	});
+}
+
+function sandcastle(ctx: BuildContext, x: number, z: number, s: number): void {
+	const sand = 0xe3c58a;
+	const parts: BufferGeometry[] = [
+		box(1.6 * s, 0.4 * s, 1.6 * s, sand, 0, 0, 0),
+		box(0.8 * s, 0.7 * s, 0.8 * s, 0xe9cd94, 0, 0.4 * s, 0),
+		cone(0.36 * s, 0.5 * s, 6, 0xe8463c, 0, 1.1 * s, 0),
+		cyl(0.02, 0.02, 0.5 * s, 4, 0xeeeeee, 0, 1.6 * s, 0),
+		box(0.3 * s, 0.18 * s, 0.02, 0xf2c94c, 0.17 * s, 1.95 * s, 0),
+	];
+	for (const sx of [-1, 1]) {
+		for (const sz of [-1, 1]) {
+			parts.push(
+				cyl(
+					0.2 * s,
+					0.22 * s,
+					0.9 * s,
+					6,
+					0xdcbd80,
+					sx * 0.7 * s,
+					0,
+					sz * 0.7 * s,
+				),
+				cone(
+					0.26 * s,
+					0.3 * s,
+					6,
+					0xc9a45a,
+					sx * 0.7 * s,
+					0.9 * s,
+					sz * 0.7 * s,
+				),
+			);
+		}
+	}
+	ctx.statics.push(place(merge(parts), { x, y: CELL_Y, z }));
+}
+
+/** Beach-soccer pitch (long axis X) with goals and a ball. */
+function soccerPitch(ctx: BuildContext, cx: number, cz: number): void {
+	const w = 12.2;
+	const d = 8.2;
+	const y = CELL_Y;
+	const line = 0xffffff;
+	const parts: BufferGeometry[] = [
+		box(w, 0.03, d, 0xe3c98a, cx, y, cz),
+		box(w, 0.01, 0.1, line, cx, y + 0.03, cz - d / 2 + 0.1),
+		box(w, 0.01, 0.1, line, cx, y + 0.03, cz + d / 2 - 0.1),
+		box(0.1, 0.01, d, line, cx - w / 2 + 0.1, y + 0.03, cz),
+		box(0.1, 0.01, d, line, cx + w / 2 - 0.1, y + 0.03, cz),
+		box(0.1, 0.01, d, line, cx, y + 0.03, cz),
+		paint(new IcosahedronGeometry(0.16, 0), 0xffffff).translate(
+			cx + 0.8,
+			y + 0.2,
+			cz - 0.6,
+		),
+	];
+	for (const side of [-1, 1]) {
+		const gx = cx + side * (w / 2 - 0.1);
+		parts.push(
+			cyl(0.05, 0.05, 1.5, 6, line, gx, y, cz - 1.5),
+			cyl(0.05, 0.05, 1.5, 6, line, gx, y, cz + 1.5),
+			box(0.08, 0.08, 3.1, line, gx, y + 1.5, cz),
+			box(0.04, 1.4, 3, 0xe8e8e8, gx + side * 0.9, y, cz),
+			box(0.9, 0.04, 3, 0xe8e8e8, gx + side * 0.45, y + 1.45, cz),
+			box(0.9, 1.4, 0.04, 0xe8e8e8, gx + side * 0.45, y, cz - 1.5),
+			box(0.9, 1.4, 0.04, 0xe8e8e8, gx + side * 0.45, y, cz + 1.5),
+		);
+	}
+	ctx.statics.push(...parts);
+}
+
+/** Surf-school hut facing +X plus a rack of upright boards. */
+function surfSchool(ctx: BuildContext, rnd: Rng): void {
+	const parts: BufferGeometry[] = [
+		box(3.6, 2.4, 3, 0x45b8c9, 0, 0, 0),
+		prism(4.2, 1.1, 3.4, 0xf2c94c, 0, 2.4, 0),
+		box(2, 0.9, 0.1, 0x1f2a33, 0, 1.1, 1.52),
+		box(2.4, 0.12, 0.6, 0xd9a066, 0, 1, 1.8),
+		box(1.4, 0.12, 1, 0xe8463c, -0.7, 2.2, 2),
+		box(1.4, 0.12, 1, 0xffffff, 0.7, 2.2, 2),
+		glow(box(2.6, 0.1, 0.1, 0x4cf0ff, 0, 2.2, 1.55), GLOW.always),
+	];
+	for (const [i, sx] of [-1, 1].entries()) {
+		for (let k = 0; k < 3; k++) {
+			parts.push(
+				place(box(0.06, 2.2, 0.5, rnd.pick(BRIGHTS)), {
+					rz: sx * 0.08,
+					x: sx * (1.95 + k * 0.1),
+					z: -0.9 + k * 0.9 + i * 0.2,
+				}),
+			);
+		}
+	}
+	ctx.statics.push(
+		place(merge(parts), { x: -80, y: CELL_Y, z: 68.8, ry: Math.PI / 2 }),
+	);
+
+	const rack: BufferGeometry[] = [
+		box(0.1, 2, 0.1, 0x8a5a3c, -1.7, 0, 0.2),
+		box(0.1, 2, 0.1, 0x8a5a3c, 1.7, 0, 0.2),
+		box(3.4, 0.08, 0.1, 0x8a5a3c, 0, 0.5, 0.15),
+		box(3.4, 0.08, 0.1, 0x8a5a3c, 0, 1.5, 0.15),
+	];
+	for (let i = 0; i < 8; i++) {
+		rack.push(
+			place(box(0.42, 2.1, 0.06, rnd.pick([...BRIGHTS, 0xffffff, 0x4cf0ff])), {
+				rx: -0.08,
+				x: -1.4 + i * 0.4,
+				y: 0.1,
+			}),
+		);
+	}
+	ctx.statics.push(
+		place(merge(rack), { x: -77.9, y: CELL_Y, z: 72.4, ry: Math.PI / 2 }),
+	);
+}
+
+function kayak(ctx: BuildContext, x: number, z: number, col: number): void {
+	ctx.statics.push(
+		place(
+			merge([
+				box(0.62, 0.22, 2.8, col, 0, 0, 0),
+				box(0.44, 0.2, 0.4, col, 0, 0.01, 1.5),
+				box(0.44, 0.2, 0.4, col, 0, 0.01, -1.5),
+				box(0.34, 0.1, 0.8, 0x2b3a4a, 0, 0.22, 0.1),
+				box(2, 0.04, 0.08, 0xeeeeee, 0, 0.32, 0.1),
+				box(0.1, 0.05, 0.3, 0x2b2b2b, 0.95, 0.31, 0.1),
+				box(0.1, 0.05, 0.3, 0x2b2b2b, -0.95, 0.31, 0.1),
+			]),
+			{ x, y: CELL_Y, z },
+		),
+	);
+}
+
+/** Pool deck with coping, a hot tub, loungers and parasols beside the hotels. */
+function resortPool(ctx: BuildContext, rnd: Rng): void {
+	const y = CELL_Y;
+	const top = y + 0.12;
+	const px = -56.8;
+	const pz = 54.2;
+	const parts: BufferGeometry[] = [
+		box(9.6, 0.12, 7, 0xe8e2d0, -56.8, y, 55.2),
+		box(5.8, 0.14, 0.2, 0xffffff, px, top, pz - 1.5),
+		box(5.8, 0.14, 0.2, 0xffffff, px, top, pz + 1.5),
+		box(0.2, 0.14, 3.2, 0xffffff, px - 2.9, top, pz),
+		box(0.2, 0.14, 3.2, 0xffffff, px + 2.9, top, pz),
+		box(5.6, 0.08, 2.8, 0x4cc9f0, px, top, pz),
+		cyl(1, 1, 0.25, 10, 0xf4f4f4, -52.9, top, 53.2),
+		cyl(0.85, 0.85, 0.27, 10, 0x4cc9f0, -52.9, top, 53.2),
+		// Pool ladder and a little diving board.
+		box(0.06, 0.5, 0.06, 0xc9ccd1, px + 2.2, top, pz - 1.35),
+		box(0.9, 0.08, 0.35, 0xf2c94c, px - 2.2, top + 0.3, pz + 1.9),
+	];
+	for (const x of [-60.4, -59, -57.6, -56.2, -54.8, -53.4]) {
+		parts.push(
+			...lounger(x, 57.1, rnd.pick(BRIGHTS)).map((g) =>
+				g.translate(0, 0.12, 0),
+			),
+		);
+	}
+	for (const x of [-59.7, -56.9, -54.1]) {
+		parts.push(...parasol(x, 56.75, top, rnd.pick(BRIGHTS)));
+	}
+	for (const [i, x] of [-60.4, -59, -56.2, -54.8].entries()) {
+		parts.push(
+			place(
+				tintWhite(personLying(), SHIRTS[(i * 2 + 1) % SHIRTS.length] as number),
+				{
+					x,
+					y: top + 0.2,
+					z: 57.35,
+				},
+			),
+		);
+	}
+	ctx.statics.push(...parts);
+	for (const [x, z] of [
+		[-62.4, 52.6],
+		[-62.4, 58.4],
+	] as const) {
+		ctx.statics.push(place(palm(), { x, y, z, ry: rnd.range(0, Math.PI * 2) }));
+	}
+}
+
+/** Cafe table with a parasol and two chairs on the boardwalk. */
+function cafeSet(
+	x: number,
+	z: number,
+	col: number,
+	alongZ = false,
+): BufferGeometry {
+	return merge([
+		cyl(0.4, 0.4, 0.05, 10, 0xf4f4f4, x, SIDEWALK_Y + 0.72, z),
+		cyl(0.05, 0.05, 0.72, 5, 0x777777, x, SIDEWALK_Y, z),
+		cyl(0.03, 0.03, 2.2, 5, 0xeeeeee, x, SIDEWALK_Y, z),
+		cone(1.25, 0.5, 8, col, x, SIDEWALK_Y + 2.2, z),
+		box(
+			0.32,
+			0.45,
+			0.32,
+			0x8a5a3c,
+			x + (alongZ ? 0 : 0.62),
+			SIDEWALK_Y,
+			z + (alongZ ? 0.62 : 0),
+		),
+		box(
+			0.32,
+			0.45,
+			0.32,
+			0x8a5a3c,
+			x - (alongZ ? 0 : 0.62),
+			SIDEWALK_Y,
+			z - (alongZ ? 0.62 : 0),
+		),
+	]);
+}
+
+/** Everything added to the open sand and the hotel frontage; returns standing-crowd spots. */
+function buildBeachLife(ctx: BuildContext): CrowdSpot[] {
+	const rnd = mulberry32(WORLD_SEED ^ 0xbeac4);
+	const s = ctx.statics;
+	const y = CELL_Y;
+	const spots: CrowdSpot[] = [];
+
+	resortPool(ctx, rnd);
+	soccerPitch(ctx, -71.5, 63.5);
+	surfSchool(ctx, rnd);
+	for (const x of [-81, -80]) {
+		kayak(ctx, x, 54, rnd.pick(BRIGHTS));
+		kayak(ctx, x, 57.8, rnd.pick(BRIGHTS));
+	}
+	loungerRow(
+		ctx,
+		rnd,
+		[-78.2, -76.35, -74.5, -72.65, -70.8, -68.95, -67.1, -65.25, -63.4],
+		57,
+	);
+	loungerRow(ctx, rnd, [-75.6, -73.75, -71.9, -70.05, -68.2, -66.35], 69);
+	for (const z0 of [67, 69.9]) {
+		loungerRow(ctx, rnd, [-57.2, -55.5, -53.8, -52.1], z0);
+	}
+	for (const [x, z, k] of [
+		[-62.4, 60.9, 1],
+		[-57, 60.4, 0.9],
+		[-75.8, 74, 1],
+		[-75.8, 79.2, 0.9],
+		[-70, 81.5, 1],
+		[-60.5, 81.5, 1.1],
+	] as const) {
+		sandcastle(ctx, x, z, k);
+		spots.push({ x: x + 1.3, z: z + 0.4, y }, { x: x - 1.2, z: z + 0.9, y });
+	}
+
+	// More palms: west edge, south edge, boardwalk side and around the pitch.
+	for (const [x, z] of [
+		[-81.8, 64.4],
+		[-81.8, 81],
+		[-77.5, 81.9],
+		[-66.5, 81.9],
+		[-57.3, 81.9],
+		[-50.3, 63],
+		[-50.3, 66.5],
+		[-50.3, 76.6],
+		[-78.6, 58.8],
+		[-64.4, 58.9],
+	] as const) {
+		s.push(place(palm(), { x, y, z, ry: rnd.range(0, Math.PI * 2) }));
+	}
+
+	// Hotel terraces: cafe sets on the boardwalk in front of both hotel rows.
+	const terrace: BufferGeometry[] = [];
+	for (const cx of [-80.2, -71, -62.5, -52.5]) {
+		for (const dx of [-0.8, 0.8]) {
+			terrace.push(cafeSet(cx + dx, 45.75, rnd.pick(BRIGHTS)));
+			spots.push({
+				x: cx + dx + 0.62,
+				z: 45.8,
+				y: SIDEWALK_Y,
+				ry: -Math.PI / 2,
+			});
+		}
+	}
+	for (const cz of [52.5, 63, 73]) {
+		for (const dz of [-0.9, 0.9]) {
+			terrace.push(cafeSet(-45.8, cz + dz, rnd.pick(BRIGHTS), true));
+			spots.push({ x: -45.8, z: cz + dz + 0.62, y: SIDEWALK_Y });
+		}
+	}
+	s.push(...terrace);
+
+	// Standing beach-goers: pitch players, surf class, pool deck, lounger rows.
+	for (const [x, z] of [
+		[-75.5, 61.5],
+		[-73, 65.5],
+		[-71.5, 62.5],
+		[-69.5, 64.5],
+		[-67.5, 61],
+		[-70.5, 66.5],
+		[-74.5, 63.5],
+		[-66.8, 65.8],
+	] as const) {
+		spots.push({ x, z, y: y + 0.03 });
+	}
+	for (const [x, z] of [
+		[-77.4, 68],
+		[-77.1, 69.2],
+		[-77.5, 70.2],
+		[-78.2, 75.4],
+	] as const) {
+		spots.push({ x, z, y, ry: Math.PI / 2 });
+	}
+	for (const [x, z] of [
+		[-60.6, 54.2],
+		[-58.4, 51.9],
+		[-55.2, 51.9],
+		[-53.2, 55.2],
+		[-52.6, 51.9],
+	] as const) {
+		spots.push({ x, z, y: y + 0.12 });
+	}
+	for (const x of [-77, -73.5, -70, -66.5]) spots.push({ x, z: 58.9, y });
+	for (const x of [-74.5, -71, -67.5]) spots.push({ x, z: 71.4, y });
 	return spots;
 }
 
@@ -714,6 +1108,7 @@ export function buildBeach(ctx: BuildContext): void {
 	buildBoardwalk(ctx);
 	buildHotels(ctx);
 	const spots = buildSand(ctx);
+	spots.push(...buildBeachLife(ctx));
 	buildPier(ctx);
 	buildLighthouse(ctx);
 	createBoats(ctx);
@@ -725,5 +1120,5 @@ export function buildBeach(ctx: BuildContext): void {
 			ry: Math.PI / 2,
 		});
 	});
-	createCrowd(ctx, spots, { count: 56, spread: 0.45 });
+	createCrowd(ctx, spots, { count: 112, spread: 0.45 });
 }

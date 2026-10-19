@@ -1,8 +1,8 @@
 import { type BufferGeometry, Vector3 } from "three";
-import { box, cyl, GLOW, glow, merge, place } from "../geometry";
+import { box, cone, cyl, GLOW, glow, merge, place } from "../geometry";
 import { apartment, office, skyscraper, walkup } from "../kit/buildings";
 import { BRIGHTS, CARS, PAVEMENT, ROAD, SIDEWALK } from "../palette";
-import { bench, car, roundTree } from "../prefabs";
+import { bench, car, lamp, roundTree } from "../prefabs";
 import { type CrowdSpot, createCrowd } from "../sim/crowd";
 import { Polyline } from "../sim/path";
 import type { BuildContext } from "./context";
@@ -239,7 +239,183 @@ function kiosksAndSubway(ctx: BuildContext): void {
 	);
 }
 
-function plazaCrowd(ctx: BuildContext): void {
+const CURB = 2.3;
+
+function hydrant(): BufferGeometry {
+	return merge([
+		cyl(0.13, 0.15, 0.55, 6, 0xe8463c, 0, 0, 0),
+		cone(0.15, 0.14, 6, 0xe8463c, 0, 0.55, 0),
+		box(0.34, 0.1, 0.1, 0xe8463c, 0, 0.3, 0),
+	]);
+}
+
+function mailbox(): BufferGeometry {
+	return merge([
+		box(0.1, 0.45, 0.1, 0x444a52, 0, 0, 0),
+		box(0.5, 0.4, 0.4, 0x3b7dd8, 0, 0.45, 0),
+		box(0.52, 0.08, 0.42, 0x2f64b0, 0, 0.85, 0),
+	]);
+}
+
+function bin(): BufferGeometry {
+	return merge([
+		cyl(0.22, 0.19, 0.7, 8, 0x4a5560, 0, 0, 0),
+		cyl(0.24, 0.24, 0.06, 8, 0x2f3740, 0, 0.7, 0),
+	]);
+}
+
+function phoneBooth(): BufferGeometry {
+	const parts = [
+		box(0.9, 0.12, 0.9, 0xe8463c, 0, 2.1, 0),
+		box(0.8, 1.9, 0.05, 0xe8463c, 0, 0, -0.42),
+		box(0.05, 1.9, 0.8, 0xe8463c, -0.42, 0, 0),
+		box(0.05, 1.9, 0.8, 0xe8463c, 0.42, 0, 0),
+		box(0.78, 1.6, 0.03, 0x9fc6d8, 0, 0.3, 0.42),
+		glow(box(0.5, 0.12, 0.04, 0xfff1c4, 0, 1.9, 0.38), GLOW.night),
+	];
+	return merge(parts);
+}
+
+function bikeRack(): BufferGeometry {
+	const parts = [box(1.4, 0.05, 0.05, 0x777f86, 0, 0.5, 0)];
+	for (const x of [-0.6, 0, 0.6])
+		parts.push(box(0.05, 0.5, 0.05, 0x777f86, x, 0, 0));
+	return merge(parts);
+}
+
+interface Taken {
+	x: number;
+	z: number;
+	r: number;
+}
+
+/** Lamps, benches, hydrants, mailboxes, bins, phone booths and bike racks on the internal sidewalks. */
+function streetFurniture(ctx: BuildContext): CrowdSpot[] {
+	const { rng, statics } = ctx;
+	const spots: CrowdSpot[] = [];
+	const taken: Taken[] = [
+		...KIOSKS.map(([x, z]) => ({ x, z, r: 1.1 })),
+		{ x: -41.25, z: -47.25, r: 1.7 },
+		{ x: PLAZA_CENTRE, z: PLAZA_CENTRE, r: 4.2 },
+	];
+	for (let i = 0; i < 3; i++) {
+		const xr = BLOCKS[i] as Range;
+		for (const edge of [
+			...(i > 0 ? [xr[0] + 0.5] : []),
+			...(i < 2 ? [xr[1] - 0.5] : []),
+		]) {
+			for (const [z0, z1] of BLOCKS) {
+				for (let t = z0 + 3; t <= z1 - 3; t += 5.5) {
+					taken.push({ x: edge, z: t, r: 0.9 }, { x: t, z: edge, r: 0.9 });
+				}
+			}
+		}
+	}
+	const put = (
+		make: () => BufferGeometry,
+		x: number,
+		z: number,
+		ry: number,
+		r: number,
+	): boolean => {
+		if (taken.some((t) => Math.hypot(t.x - x, t.z - z) < t.r + r)) return false;
+		taken.push({ x, z, r });
+		statics.push(place(make(), { x, y: SIDEWALK_Y, z, ry }));
+		return true;
+	};
+
+	// Intersection corners: a lamp each, plus a hydrant or mailbox beside some.
+	for (const cx of STREETS) {
+		for (const cz of STREETS) {
+			for (const sx of [-1, 1]) {
+				for (const sz of [-1, 1]) {
+					if (rng() < 0.3) {
+						const ry = Math.atan2(sx, sz);
+						put(
+							() => kiosk(rng.pick(BRIGHTS)),
+							cx + sx * 2.75,
+							cz + sz * 2.75,
+							ry,
+							0.9,
+						);
+					}
+					put(lamp, cx + sx * CURB, cz + sz * CURB, 0, 0.4);
+					const roll = rng();
+					if (roll < 0.3)
+						put(hydrant, cx + sx * CURB, cz + sz * (CURB + 1.1), 0, 0.4);
+					else if (roll < 0.55)
+						put(mailbox, cx + sx * (CURB + 1.1), cz + sz * CURB, 0, 0.5);
+				}
+			}
+		}
+	}
+
+	// Mid-block: a lamp on every sidewalk edge and a rotating choice of furniture.
+	const kinds = ["bench", "bench", "bin", "booth", "rack", "none"] as const;
+	for (const c of STREETS) {
+		for (const northSouth of [true, false]) {
+			for (const side of [-1, 1]) {
+				for (const [a0, a1] of BLOCKS) {
+					const mid = (a0 + a1) / 2;
+					const at = (t: number, o: number): [number, number] =>
+						northSouth ? [c + o, t] : [t, c + o];
+					const [lx, lz] = at(mid, side * CURB);
+					put(lamp, lx, lz, 0, 0.4);
+					const t = a0 + 11.3;
+					const o = side * 2.55;
+					const [x, z] = at(t, o);
+					// Face the street.
+					const ry = northSouth
+						? -side * (Math.PI / 2)
+						: side > 0
+							? Math.PI
+							: 0;
+					const kind = rng.pick(kinds);
+					let placed = false;
+					if (kind === "bench") placed = put(bench, x, z, ry, 0.9);
+					else if (kind === "bin") placed = put(bin, x, z, 0, 0.4);
+					else if (kind === "booth") placed = put(phoneBooth, x, z, ry, 0.7);
+					else if (kind === "rack")
+						placed = put(bikeRack, x, z, northSouth ? Math.PI / 2 : 0, 0.8);
+					if (placed) {
+						const [px, pz] = at(t - 1.3, side * 2.75);
+						spots.push({ x: px, z: pz, y: SIDEWALK_Y });
+					}
+				}
+			}
+		}
+	}
+	return spots;
+}
+
+/** Flower planters at the corners of the plaza. */
+function plazaPlanters(ctx: BuildContext): void {
+	const y = SIDEWALK_Y + 0.04;
+	for (const dx of [-1, 1]) {
+		for (const dz of [-1, 1]) {
+			const parts = [
+				box(0.8, 0.4, 0.8, 0xb5544a, 0, 0, 0),
+				box(0.7, 0.05, 0.7, 0x6b4a30, 0, 0.4, 0),
+			];
+			for (const [fx, fz] of [
+				[-0.2, -0.15],
+				[0.2, 0.1],
+				[-0.05, 0.22],
+			] as const) {
+				parts.push(box(0.2, 0.3, 0.2, ctx.rng.pick(BRIGHTS), fx, 0.42, fz));
+			}
+			ctx.statics.push(
+				place(merge(parts), {
+					x: PLAZA_CENTRE + dx * 2.2,
+					y,
+					z: PLAZA_CENTRE + dz * 2.2,
+				}),
+			);
+		}
+	}
+}
+
+function plazaCrowd(ctx: BuildContext, extra: CrowdSpot[]): void {
 	const p = PLAZA_CENTRE;
 	const py = SIDEWALK_Y + 0.04;
 	const spots: CrowdSpot[] = [];
@@ -255,7 +431,7 @@ function plazaCrowd(ctx: BuildContext): void {
 	for (const dx of [-1.8, -0.4, 1.2]) {
 		spots.push({ x: -41.25 + dx, z: -47.25 + 0.4, y: SIDEWALK_Y });
 	}
-	createCrowd(ctx, spots, { count: 24, spread: 0.45 });
+	createCrowd(ctx, [...spots, ...extra], { count: 46, spread: 0.45 });
 }
 
 export function buildDowntown(ctx: BuildContext): void {
@@ -334,5 +510,6 @@ export function buildDowntown(ctx: BuildContext): void {
 	parkedCars(ctx);
 	streetTrees(ctx);
 	kiosksAndSubway(ctx);
-	plazaCrowd(ctx);
+	plazaPlanters(ctx);
+	plazaCrowd(ctx, streetFurniture(ctx));
 }
