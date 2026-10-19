@@ -1,0 +1,22 @@
+@import "@fontsource/press-start-2p/latin.css";
+@import "tailwindcss" source(none);
+@source "../../components/ui";
+@source "../../components/hud/ZoneContent.tsx";
+@source "./";
+@import "tw-animate-css";
+@import "../../theme.css";
+
+/* A color-scheme that differs from the host's makes Chrome paint an opaque iframe backdrop. */
+html {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+html,
+body {
+  margin: 0;
+  background: transparent;
+}

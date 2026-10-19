@@ -1,5 +1,12 @@
 import { useSelector } from "@tanstack/react-store";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+	lazy,
+	Suspense,
+	useCallback,
+	useEffect,
+	useRef,
+	useState,
+} from "react";
 import type { CityWorld } from "#/city/world";
 import { CV } from "#/data/cv";
 import type { ZoneId } from "#/data/zones";
@@ -7,6 +14,7 @@ import { isDesktopViewport, readParam } from "#/lib/device";
 import { setUi, uiStore } from "#/store/ui";
 import { CityCanvas } from "./CityCanvas";
 import { ErrorBoundary } from "./ErrorBoundary";
+import { AgentNotice } from "./hud/AgentNotice";
 import { CvOutline } from "./hud/CvOutline";
 import { HoverLabel } from "./hud/HoverLabel";
 import { NavButtons } from "./hud/NavButtons";
@@ -16,6 +24,11 @@ import { ZoneCard } from "./hud/ZoneCard";
 import { ZoneDrawer } from "./hud/ZoneDrawer";
 import { ZoneMarkers } from "./hud/ZoneMarkers";
 import { StaticFallback } from "./StaticFallback";
+
+// WebMCP tools (zod schemas, TanStack AI) load after the page, off the critical path.
+const CityMcp = lazy(() =>
+	import("./CityMcp").then((m) => ({ default: m.CityMcp })),
+);
 
 function useAnchor(
 	worldRef: React.RefObject<CityWorld | null>,
@@ -60,36 +73,51 @@ export function CityPage() {
 	}, []);
 	const close = useCallback(() => select(null), [select]);
 
-	if (tier === "fallback") return <StaticFallback />;
-
 	return (
 		<>
-			<ErrorBoundary>
-				<CityCanvas worldRef={worldRef} />
-			</ErrorBoundary>
-			{!capture && (
-				<ZoneMarkers worldRef={worldRef} onSelect={select} onHover={hover} />
-			)}
-			{!ready && (
-				<div className="pointer-events-none fixed inset-0 flex flex-col items-center justify-center gap-8">
-					<p className="retro animate-pulse text-sm">LOADING CITY…</p>
-					<ScrollHint touch={!isDesktop} />
-				</div>
-			)}
-			{!capture && (
+			<Suspense fallback={null}>
+				<CityMcp worldRef={worldRef} select={select} hover={hover} />
+			</Suspense>
+			{tier === "fallback" ? (
+				<StaticFallback />
+			) : (
 				<>
-					<TimeButton />
-					<HoverLabel />
-					<NavButtons layout="corner" />
-					{isDesktop && selected && anchor && (
-						<ZoneCard zone={CV[selected]} anchor={anchor} onClose={close} />
+					<ErrorBoundary>
+						<CityCanvas worldRef={worldRef} />
+					</ErrorBoundary>
+					{!capture && (
+						<ZoneMarkers
+							worldRef={worldRef}
+							onSelect={select}
+							onHover={hover}
+						/>
 					)}
-					{!isDesktop && (
-						<ZoneDrawer zone={selected ? CV[selected] : null} onClose={close} />
+					{!ready && (
+						<div className="pointer-events-none fixed inset-0 flex flex-col items-center justify-center gap-8">
+							<p className="retro animate-pulse text-sm">LOADING CITY…</p>
+							<ScrollHint touch={!isDesktop} />
+						</div>
 					)}
+					{!capture && (
+						<>
+							<TimeButton />
+							<HoverLabel />
+							<AgentNotice />
+							<NavButtons layout="corner" />
+							{isDesktop && selected && anchor && (
+								<ZoneCard zone={CV[selected]} anchor={anchor} onClose={close} />
+							)}
+							{!isDesktop && (
+								<ZoneDrawer
+									zone={selected ? CV[selected] : null}
+									onClose={close}
+								/>
+							)}
+						</>
+					)}
+					<CvOutline />
 				</>
 			)}
-			<CvOutline />
 		</>
 	);
 }

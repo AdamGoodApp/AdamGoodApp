@@ -16,6 +16,10 @@ export default defineConfig({
 			"three/addons/utils/BufferGeometryUtils.js",
 			"three/addons/tsl/display/BloomNode.js",
 			"three/addons/tsl/display/GaussianBlurNode.js",
+			"@tanstack/ai",
+			"@tanstack/ai-react",
+			"@mcp-b/global",
+			"zod",
 		],
 	},
 	plugins: [

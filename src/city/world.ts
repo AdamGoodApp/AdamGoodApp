@@ -35,6 +35,38 @@ export interface CityWorldOptions {
 }
 
 const STEP = 1 / 60;
+/** Simulation steps per frame at speed 1; scaled with the speed. */
+const STEPS_PER_FRAME = 3;
+const MIN_SPEED = 0.25;
+const MAX_SPEED = 3;
+
+export interface CityView {
+	x: number;
+	z: number;
+	zoom: number;
+}
+
+export interface SimulationState {
+	paused: boolean;
+	speed: number;
+	simTime: number;
+	agents: number;
+}
+
+interface CameraTween {
+	from: CityView;
+	to: CityView;
+	start: number;
+	duration: number;
+}
+
+function lerp(a: number, b: number, t: number): number {
+	return a + (b - a) * t;
+}
+
+function easeInOut(k: number): number {
+	return k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
+}
 
 export class CityWorld {
 	readonly renderer: WebGPURenderer;
@@ -51,6 +83,9 @@ export class CityWorld {
 	private selected: ZoneId | null = null;
 	private hovered: ZoneId | null = null;
 	private paused: boolean;
+	private speed = 1;
+	private mode: CameraMode;
+	private tween: CameraTween | null = null;
 	private reducedMotion: boolean;
 	private dirty = true;
 	private last = -1;
@@ -78,6 +113,7 @@ export class CityWorld {
 				? "webgpu"
 				: "webgl2";
 		this.paused = o.reducedMotion;
+		this.mode = o.mode;
 
 		const hemi = new HemisphereLight(0xbfe3ff, 0xcfe9b8, 0.9);
 		const sun = new DirectionalLight(0xfff2d6, 2.2);
@@ -121,6 +157,8 @@ export class CityWorld {
 				hover: (id) => this.hover(id),
 				tap: (id) => this.select(id === this.selected ? null : id),
 				panned: () => {
+					// User input wins over an agent-driven camera flight.
+					this.tween = null;
 					this.dirty = true;
 					this.o.onViewChange();
 				},
@@ -151,20 +189,23 @@ export class CityWorld {
 		const dt = this.last < 0 ? 0 : Math.min((ms - this.last) / 1000, 0.1);
 		this.last = ms;
 
+		this.advanceTween(ms);
+
 		if (!this.paused) {
-			this.acc += dt;
+			this.acc += dt * this.speed;
+			const maxSteps = Math.ceil(STEPS_PER_FRAME * this.speed);
 			let steps = 0;
-			while (this.acc >= STEP && steps < 3) {
+			while (this.acc >= STEP && steps < maxSteps) {
 				for (const a of this.agents) a.update(STEP, this.simTime);
 				this.simTime += STEP;
 				this.acc -= STEP;
 				steps++;
 			}
-			if (steps === 3) this.acc = 0;
+			if (steps === maxSteps) this.acc = 0;
 		}
 		simClock.value = this.simTime;
 
-		const lighting = this.dayNight.update(dt, !this.paused);
+		const lighting = this.dayNight.update(dt * this.speed, !this.paused);
 		const animating = this.highlights.update(dt, this.reducedMotion);
 		if (
 			this.paused &&
@@ -190,7 +231,27 @@ export class CityWorld {
 		}
 	}
 
+	private advanceTween(ms: number): void {
+		const t = this.tween;
+		if (!t) return;
+		const k =
+			t.duration <= 0
+				? 1
+				: Math.min(1, Math.max(0, (ms - t.start) / t.duration));
+		const e = easeInOut(k);
+		this.camera.setView(
+			lerp(t.from.x, t.to.x, e),
+			lerp(t.from.z, t.to.z, e),
+			Math.exp(lerp(Math.log(t.from.zoom), Math.log(t.to.zoom), e)),
+		);
+		if (k >= 1) this.tween = null;
+		this.dirty = true;
+		this.o.onViewChange();
+	}
+
 	setMode(mode: CameraMode): void {
+		this.mode = mode;
+		this.tween = null;
 		this.camera.setMode(mode);
 		this.input.setMode(mode);
 		this.resize();
@@ -239,6 +300,56 @@ export class CityWorld {
 
 	cameraTarget(): { x: number; z: number } {
 		return { x: this.camera.target.x, z: this.camera.target.z };
+	}
+
+	/** Animate the camera to a ground point and zoom; user panning cancels it. */
+	flyTo(x: number, z: number, zoom: number, durationMs = 700): void {
+		this.tween = {
+			from: this.camera.view,
+			to: { x, z, zoom },
+			start: performance.now(),
+			duration: this.reducedMotion ? 0 : durationMs,
+		};
+		this.dirty = true;
+	}
+
+	focusZone(id: ZoneId, zoom = 2.2): void {
+		const r = ZONE_BY_ID[id].rect;
+		this.flyTo((r.minX + r.maxX) / 2, (r.minZ + r.maxZ) / 2, zoom);
+	}
+
+	resetView(): void {
+		this.flyTo(0, 0, this.mode === "pannable" ? 2.4 : 1);
+	}
+
+	setView(view: Partial<CityView>): void {
+		const now = this.camera.view;
+		this.flyTo(view.x ?? now.x, view.z ?? now.z, view.zoom ?? now.zoom);
+	}
+
+	getView(): CityView {
+		return this.camera.view;
+	}
+
+	setSpeed(speed: number): void {
+		this.speed = Math.min(MAX_SPEED, Math.max(MIN_SPEED, speed));
+	}
+
+	getSimulation(): SimulationState {
+		return {
+			paused: this.paused,
+			speed: this.speed,
+			simTime: this.simTime,
+			agents: this.agents.length,
+		};
+	}
+
+	getSelected(): ZoneId | null {
+		return this.selected;
+	}
+
+	getHovered(): ZoneId | null {
+		return this.hovered;
 	}
 
 	setTimeMode(mode: TimeMode): void {

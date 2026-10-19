@@ -8,7 +8,7 @@ import {
 } from "#/components/ui/8bit/tabs";
 import type { Block, ZoneContent as ZoneContentData } from "#/data/cv";
 
-function Badges({ items }: { items: string[] }) {
+export function Badges({ items }: { items: string[] }) {
 	return (
 		<ul className="flex flex-wrap gap-x-4 gap-y-2 px-1.5">
 			{items.map((item) => (
@@ -22,7 +22,7 @@ function Badges({ items }: { items: string[] }) {
 	);
 }
 
-function Bullets({ items }: { items: string[] }) {
+export function Bullets({ items }: { items: string[] }) {
 	return (
 		<ul className="list-disc space-y-1.5 pl-4 text-sm leading-relaxed">
 			{items.map((item) => (
@@ -32,7 +32,7 @@ function Bullets({ items }: { items: string[] }) {
 	);
 }
 
-function external(href: string) {
+export function external(href: string) {
 	return href.startsWith("mailto:")
 		? {}
 		: { target: "_blank", rel: "noreferrer" };

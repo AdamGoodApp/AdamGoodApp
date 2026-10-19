@@ -104,11 +104,30 @@ export class IsoCamera {
 		this.clampTarget();
 	}
 
+	/** Smallest zoom that keeps the view inside the built city. */
+	private minZoom(): number {
+		return Math.max(1, this.fitHalfW / BUILT_U, this.fitHalfH / BUILT_V);
+	}
+
 	zoomBy(factor: number): void {
-		const min = Math.max(1, this.fitHalfW / BUILT_U, this.fitHalfH / BUILT_V);
-		this.zoomFactor = Math.min(3.5, Math.max(min, this.zoomFactor * factor));
+		this.zoomFactor = Math.min(
+			3.5,
+			Math.max(this.minZoom(), this.zoomFactor * factor),
+		);
 		this.applyFrustum();
 		this.clampTarget();
+	}
+
+	/** Jump to a ground target and zoom, clamped like user input. */
+	setView(x: number, z: number, zoom: number): void {
+		this.zoomFactor = Math.min(3.5, Math.max(this.minZoom(), zoom));
+		this.target.set(x, 0, z);
+		this.applyFrustum();
+		this.clampTarget();
+	}
+
+	get view(): { x: number; z: number; zoom: number } {
+		return { x: this.target.x, z: this.target.z, zoom: this.zoomFactor };
 	}
 
 	/**

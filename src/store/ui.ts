@@ -16,9 +16,17 @@ export interface UiState {
 	isNight: boolean;
 	/** Bumped whenever the camera view changes, so screen-anchored HUD re-measures. */
 	viewVersion: number;
+	/** Message bubble shown by an agent through the `show_message` / `run_tour` tools. */
+	notice: AgentNoticeState | null;
 }
 
-export const uiStore = new Store<UiState>({
+export interface AgentNoticeState {
+	id: number;
+	title?: string;
+	text: string;
+}
+
+export const INITIAL_UI: UiState = {
 	tier: "pending",
 	ready: false,
 	hovered: null,
@@ -28,7 +36,10 @@ export const uiStore = new Store<UiState>({
 	timeMode: "auto",
 	isNight: false,
 	viewVersion: 0,
-});
+	notice: null,
+};
+
+export const uiStore = new Store<UiState>({ ...INITIAL_UI });
 
 export function setUi(patch: Partial<UiState>): void {
 	uiStore.setState((s) => ({ ...s, ...patch }));

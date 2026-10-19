@@ -370,7 +370,7 @@ export const CV: Record<ZoneId, ZoneContent> = {
 			{
 				kind: "project",
 				name: "This city",
-				text: "Procedural 3D city rendered with three.js WebGPU (WebGL2 fallback), TanStack Start, Cloudflare Workers.",
+				text: "Procedural 3D city rendered with three.js WebGPU (WebGL2 fallback), TanStack Start, Cloudflare Workers. It also serves an MCP endpoint at https://adamgoodapp.com/mcp.",
 				href: LINKS.repo,
 			},
 		],

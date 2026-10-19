@@ -61,3 +61,24 @@ describe("IsoCamera.zoomAt", () => {
 		expect(Math.hypot(cam.target.x, cam.target.z)).toBeLessThan(1e-9);
 	});
 });
+
+describe("IsoCamera.setView", () => {
+	it("clamps zoom and target like user input", () => {
+		const cam = new IsoCamera("pannable");
+		cam.fit(412 / 839);
+		cam.setView(300, 300, 9);
+		const b = viewBounds(cam);
+		expect(cam.view.zoom).toBe(3.5);
+		expect(b.maxU).toBeLessThanOrEqual(215 + 1e-6);
+		expect(b.maxV).toBeLessThanOrEqual(115 + 1e-6);
+	});
+
+	it("centres on a reachable point", () => {
+		const cam = new IsoCamera("fixed");
+		cam.fit(1.6);
+		cam.setView(-58.5, -58.5, 2.2);
+		expect(cam.view.x).toBeCloseTo(-58.5, 5);
+		expect(cam.view.z).toBeCloseTo(-58.5, 5);
+		expect(cam.view.zoom).toBeCloseTo(2.2);
+	});
+});

@@ -4,6 +4,7 @@
 		"e2e",
 		"scripts",
 		"vite.config.ts",
+		"vite.widget.config.ts",
 		"vitest.config.ts",
 		"playwright.config.ts"
 	],
@@ -15,8 +16,8 @@
 			"#/*": ["./src/*"],
 			"@/*": ["./src/*"]
 		},
-		"lib": ["ES2022", "DOM", "DOM.Iterable"],
-		"types": ["vite/client", "@webgpu/types"],
+		"lib": ["ES2022", "ES2024.Promise", "DOM", "DOM.Iterable"],
+		"types": ["vite/client", "@webgpu/types", "webmcp-types"],
 
 		/* Bundler mode */
 		"moduleResolution": "bundler",

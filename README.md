@@ -39,17 +39,31 @@ My CV as a living, SimCity-style isometric city that fills the whole screen: sev
 - **WebGPU first.** three.js `WebGPURenderer` runs on WebGPU and falls back to its WebGL2 backend, with a post-processing pipeline for bloom and a tilt-shift blur. Without either backend, a static snapshot with the same links and an accessible text CV is shown.
 - **Respectful.** `prefers-reduced-motion` freezes the simulation, hidden tabs pause it, and the full CV is server-rendered for screen readers and crawlers. The light bulbs are real buttons, so keyboard users <kbd>Tab</kbd> through the districts.
 
+## AI agents (MCP)
+
+The site is callable by AI agents three ways, all built from one set of TanStack AI `toolDefinition`s (`src/mcp/definitions.ts`):
+
+- **Remote MCP server** at **`https://adamgoodapp.com/mcp`** (Streamable HTTP, stateless, no auth). Add it as a custom connector in Claude or ChatGPT, or point the MCP Inspector at it. Tools: `get_profile`, `list_districts`, `get_district_content`, `search_cv`, `list_experience`, `list_skills`, `list_projects`, `get_contact`, `get_site_guide`; resources `cv://profile` and `cv://sections/{district}` (markdown).
+- **MCP Apps card.** Six of those tools carry `_meta.ui.resourceUri = ui://adamgoodapp/cv-widget.html`: hosts that support MCP Apps render the answer as the site's own 8-bit CV card inline in the chat (`src/mcp/apps/`, built into one self-contained HTML file by `vite.widget.config.ts`).
+- **In-page WebMCP tools** on `document.modelContext` for browser agents (native WebMCP, or the MCP-B polyfill and extension): the nine data tools plus city control — `get_city_state`, `focus_district`, `set_view`, `reset_view`, `open_district`, `close_district`, `highlight_district`, `set_time_of_day`, `control_simulation`, `show_message` (a message bubble) and `run_tour` (a guided camera tour with captions).
+
+```sh
+curl -s https://adamgoodapp.com/mcp -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_profile","arguments":{}}}'
+```
+
 ## Stack
 
-TanStack Start (React 19, file-based routing, SSR) on Cloudflare Workers · three.js r186 (`three/webgpu`, TSL) · TanStack Store · Tailwind CSS v4 · shadcn/ui + 8bitcn/ui · Biome · Vitest · Playwright + axe · lefthook · GitHub Actions.
+TanStack Start (React 19, file-based routing, SSR) on Cloudflare Workers · three.js r186 (`three/webgpu`, TSL) · TanStack Store · TanStack AI tool definitions + MCP TypeScript SDK v2 + MCP Apps + MCP-B (WebMCP) · Tailwind CSS v4 · shadcn/ui + 8bitcn/ui · Biome · Vitest · Playwright + axe · lefthook · GitHub Actions.
 
 ## Getting started
 
 ```sh
 corepack enable pnpm
 pnpm i
-pnpm dev            # http://localhost:3000 (?tier=webgl2|fallback forces a renderer, ?time=day|night pins the clock)
-pnpm test           # unit + component tests
+pnpm dev            # http://localhost:3000 (?tier=webgl2|fallback forces a renderer, ?time=day|night pins the clock); MCP at /mcp
+pnpm test           # unit + component tests (builds the MCP Apps widget first)
 pnpm build && pnpm e2e
 pnpm preview & pnpm capture   # re-render public/city.jpg and public/og.jpg
 ```
@@ -71,9 +85,11 @@ src/
   city/          three.js city (framework-free): renderer, camera, input, prefabs
     world/       district builders (downtown, beach, theme park, …)
     sim/         agents: traffic, people, planes, boats, rides, animals
-  components/    React HUD, zone card/drawer, static fallback
-  data/          CV content, district layout, links
-  routes/        TanStack Start routes
+  components/    React HUD, zone card/drawer, agent message bubble, static fallback
+  data/          CV content, CV queries, district layout, links
+  mcp/           tool definitions, in-page (WebMCP) and remote (/mcp) implementations
+    apps/        MCP Apps CV card (single-file widget build)
+  routes/        TanStack Start routes (/, /mcp)
   start.ts       request middleware (www → apex)
 e2e/             Playwright specs
 scripts/         snapshot capture
