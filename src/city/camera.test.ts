@@ -40,3 +40,24 @@ describe("IsoCamera (pannable)", () => {
 		expect(Math.hypot(cam.target.x, cam.target.z)).toBeGreaterThan(20);
 	});
 });
+
+describe("IsoCamera.zoomAt", () => {
+	it("keeps the ground under the pointer in place", () => {
+		const cam = new IsoCamera("fixed");
+		cam.fit(1.6);
+		const before = cam.groundPoint(0.5, 0.3);
+		cam.zoomAt(2, 0.5, 0.3);
+		const after = cam.groundPoint(0.5, 0.3);
+		expect(cam.zoomFactor).toBeCloseTo(2);
+		expect(after?.x).toBeCloseTo(before?.x ?? Number.NaN, 5);
+		expect(after?.z).toBeCloseTo(before?.z ?? Number.NaN, 5);
+	});
+
+	it("never zooms out past the default framing", () => {
+		const cam = new IsoCamera("fixed");
+		cam.fit(1.6);
+		cam.zoomAt(0.2, -0.8, 0.8);
+		expect(cam.zoomFactor).toBe(1);
+		expect(Math.hypot(cam.target.x, cam.target.z)).toBeLessThan(1e-9);
+	});
+});

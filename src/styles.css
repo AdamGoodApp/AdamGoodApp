@@ -145,3 +145,12 @@ body {
     transform: translateY(-6px);
   }
 }
+
+@keyframes scroll-wheel {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(3px);
+  }
+}

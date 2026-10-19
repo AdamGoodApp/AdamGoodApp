@@ -34,13 +34,17 @@ export class IsoCamera {
 	private readonly raycaster = new Raycaster();
 	private readonly ndc = new Vector2();
 
+	private mode: CameraMode;
+
 	constructor(mode: CameraMode) {
+		this.mode = mode;
 		this.zoomFactor = mode === "pannable" ? 2.4 : 1;
 		this.camera.up.set(0, 1, 0);
 		this.reposition();
 	}
 
 	setMode(mode: CameraMode): void {
+		this.mode = mode;
 		this.zoomFactor = mode === "pannable" ? 2.4 : 1;
 		if (mode === "fixed") this.target.set(0, 0, 0);
 		this.reposition();
@@ -104,6 +108,25 @@ export class IsoCamera {
 		const min = Math.max(1, this.fitHalfW / BUILT_U, this.fitHalfH / BUILT_V);
 		this.zoomFactor = Math.min(3.5, Math.max(min, this.zoomFactor * factor));
 		this.applyFrustum();
+		this.clampTarget();
+	}
+
+	/**
+	 * Zoom keeping the ground under the pointer (NDC `ndcX`, `ndcY`) fixed on screen:
+	 * the target slides toward the pointer by the share of the view the zoom removed.
+	 */
+	zoomAt(factor: number, ndcX: number, ndcY: number): void {
+		const hw = this.fitHalfW / this.zoomFactor;
+		const hh = this.fitHalfH / this.zoomFactor;
+		this.zoomBy(factor);
+		const hw2 = this.fitHalfW / this.zoomFactor;
+		const hh2 = this.fitHalfH / this.zoomFactor;
+		this.target
+			.addScaledVector(RIGHT, ndcX * (hw - hw2))
+			.addScaledVector(UP_ON_GROUND, ndcY * (hh - hh2));
+		// Fully zoomed out on desktop: return to the default centred framing.
+		if (this.mode === "fixed" && this.zoomFactor <= 1.0001)
+			this.target.set(0, 0, 0);
 		this.clampTarget();
 	}
 

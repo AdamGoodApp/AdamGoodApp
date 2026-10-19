@@ -10,6 +10,9 @@ export interface PointerHandlers {
 
 const TAP_PX = 6;
 const TAP_MS = 300;
+/** Wheel delta (pixels) → zoom exponent; trackpad pinches (ctrlKey) report small deltas. */
+const WHEEL_ZOOM = 0.0015;
+const PINCH_ZOOM = 0.012;
 
 export class PointerController {
 	private mode: CameraMode;
@@ -31,6 +34,8 @@ export class PointerController {
 		canvas.addEventListener("pointerup", this.onUp);
 		canvas.addEventListener("pointercancel", this.onCancel);
 		canvas.addEventListener("pointerleave", this.onLeave);
+		// On window so scrolling over the floating HUD (light bulbs, labels) still zooms.
+		window.addEventListener("wheel", this.onWheel, { passive: false });
 	}
 
 	setMode(mode: CameraMode): void {
@@ -46,6 +51,39 @@ export class PointerController {
 		c.removeEventListener("pointerup", this.onUp);
 		c.removeEventListener("pointercancel", this.onCancel);
 		c.removeEventListener("pointerleave", this.onLeave);
+		window.removeEventListener("wheel", this.onWheel);
+	}
+
+	/** Mouse wheel and trackpad scroll/pinch zoom toward the pointer. */
+	private onWheel = (e: WheelEvent) => {
+		// Cards and drawers scroll their own content.
+		if (e.target instanceof Element && e.target.closest('[role="dialog"]'))
+			return;
+		e.preventDefault();
+		const px = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+		const factor = Math.exp(-px * (e.ctrlKey ? PINCH_ZOOM : WHEEL_ZOOM));
+		const r = this.canvas.getBoundingClientRect();
+		const nx = ((e.clientX - r.left) / r.width) * 2 - 1;
+		const ny = -((e.clientY - r.top) / r.height) * 2 + 1;
+		this.camera.zoomAt(factor, nx, ny);
+		this.updateCursor();
+		this.handlers.panned();
+	};
+
+	/** Desktop drags pan only once the view is zoomed in past the default framing. */
+	private canDragPan(): boolean {
+		return this.mode === "pannable" || this.camera.zoomFactor > 1.001;
+	}
+
+	private updateCursor(): void {
+		if (this.mode !== "fixed") return;
+		this.canvas.style.cursor = this.down?.moved
+			? "grabbing"
+			: this.lastHover
+				? "pointer"
+				: this.camera.zoomFactor > 1.001
+					? "grab"
+					: "default";
 	}
 
 	private zoneAtEvent(e: PointerEvent): ZoneId | null {
@@ -58,7 +96,7 @@ export class PointerController {
 	private setHover(id: ZoneId | null): void {
 		if (id === this.lastHover) return;
 		this.lastHover = id;
-		this.canvas.style.cursor = id ? "pointer" : "default";
+		this.updateCursor();
 		this.handlers.hover(id);
 	}
 
@@ -75,7 +113,7 @@ export class PointerController {
 			this.down = null;
 			this.pinchDist = this.spread();
 		}
-		if (this.mode === "pannable") this.canvas.setPointerCapture(e.pointerId);
+		if (this.canDragPan()) this.canvas.setPointerCapture(e.pointerId);
 	};
 
 	private onMove = (e: PointerEvent) => {
@@ -85,7 +123,13 @@ export class PointerController {
 		) {
 			this.down.moved = true;
 		}
-		if (this.mode === "fixed") {
+		const dragging = this.down?.moved === true && this.canDragPan();
+		if (this.mode === "fixed" && !dragging) {
+			const prev = this.pointers.get(e.pointerId);
+			if (prev) {
+				prev.x = e.clientX;
+				prev.y = e.clientY;
+			}
 			this.setHover(this.zoneAtEvent(e));
 			return;
 		}
@@ -99,6 +143,7 @@ export class PointerController {
 			if (this.down && !this.down.moved) return;
 			const r = this.canvas.getBoundingClientRect();
 			this.camera.pan(dx, dy, r.width, r.height);
+			this.updateCursor();
 			this.handlers.panned();
 		} else if (this.pointers.size === 2) {
 			const d = this.spread();
@@ -113,6 +158,7 @@ export class PointerController {
 		this.pointers.delete(e.pointerId);
 		this.pinchDist = this.pointers.size === 2 ? this.spread() : 0;
 		this.down = null;
+		this.updateCursor();
 		if (
 			down &&
 			!down.moved &&

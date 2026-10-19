@@ -10,6 +10,7 @@ import { ErrorBoundary } from "./ErrorBoundary";
 import { CvOutline } from "./hud/CvOutline";
 import { HoverLabel } from "./hud/HoverLabel";
 import { NavButtons } from "./hud/NavButtons";
+import { ScrollHint } from "./hud/ScrollHint";
 import { TimeButton } from "./hud/TimeButton";
 import { ZoneCard } from "./hud/ZoneCard";
 import { ZoneDrawer } from "./hud/ZoneDrawer";
@@ -70,8 +71,9 @@ export function CityPage() {
 				<ZoneMarkers worldRef={worldRef} onSelect={select} onHover={hover} />
 			)}
 			{!ready && (
-				<div className="pointer-events-none fixed inset-0 flex items-center justify-center">
+				<div className="pointer-events-none fixed inset-0 flex flex-col items-center justify-center gap-8">
 					<p className="retro animate-pulse text-sm">LOADING CITY…</p>
+					<ScrollHint touch={!isDesktop} />
 				</div>
 			)}
 			{!capture && (
