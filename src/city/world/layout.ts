@@ -13,3 +13,9 @@ export const SIDEWALK_Y = 0.18;
 export const CELL_Y = 0.1;
 /** Lane offset from a road centreline (right-hand traffic). */
 export const LANE_OFFSET = 1.5;
+/** The ocean is a square of this half-size around the island (land is ±LAND_HALF). */
+export const OCEAN_HALF = 150;
+/** Mean water level (the land top is y = 0). */
+export const WATER_Y = -0.35;
+/** Tram loop half-size around the park (inside the avenue sidewalks at ±25.5). */
+export const TRAM_HALF = 24;

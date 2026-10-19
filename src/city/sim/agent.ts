@@ -27,7 +27,8 @@ export class Pool {
 		opts: { shadow?: boolean; color?: number } = {},
 	) {
 		this.mesh = instanced(geo, material, count, {
-			shadow: opts.shadow ?? true,
+			// Shadow passes cost a draw call per pool: only sizeable things opt in.
+			shadow: opts.shadow ?? false,
 			color: opts.color ?? 0xffffff,
 		});
 	}

@@ -1,10 +1,24 @@
-import { Group, Mesh } from "three";
+import { Group, Material, Mesh, Texture } from "three";
 import { MAT_STATIC, merge } from "../geometry";
 import type { Rng } from "../rng";
 import type { Agent } from "../sim/agent";
+import { createPeople } from "../sim/people";
+import { createTraffic } from "../sim/traffic";
+import { createWindowPool } from "../sim/windows";
+import { buildAirport } from "./airport";
+import { buildBeach } from "./beach";
+import { buildClouds } from "./clouds";
+import { buildCommercial } from "./commercial";
 import type { BuildContext } from "./context";
+import { buildDowntown } from "./downtown";
 import { buildGround } from "./ground";
+import { buildMountains } from "./mountains";
+import { buildOcean } from "./ocean";
+import { buildPark } from "./park";
+import { buildResidential } from "./residential";
 import { buildRoads } from "./roads";
+import { buildRural } from "./rural";
+import { buildThemePark } from "./themepark";
 
 export interface BuiltWorld {
 	group: Group;
@@ -29,6 +43,22 @@ export function buildWorld(rng: Rng, density: number): BuiltWorld {
 
 	buildGround(ctx);
 	buildRoads(ctx);
+	buildDowntown(ctx);
+	buildCommercial(ctx);
+	buildResidential(ctx);
+	buildBeach(ctx);
+	buildThemePark(ctx);
+	buildRural(ctx);
+	buildMountains(ctx);
+	buildAirport(ctx);
+	buildPark(ctx);
+	buildOcean(ctx);
+	buildClouds(ctx);
+
+	// Shared pools read what the district builders registered.
+	ctx.agents.push(createWindowPool(ctx));
+	createTraffic(ctx);
+	createPeople(ctx);
 
 	const staticMesh = new Mesh(merge(ctx.statics), MAT_STATIC);
 	staticMesh.castShadow = true;
@@ -40,7 +70,13 @@ export function buildWorld(rng: Rng, density: number): BuiltWorld {
 		agents: ctx.agents,
 		dispose() {
 			group.traverse((o) => {
-				if (o instanceof Mesh) o.geometry.dispose();
+				if (o instanceof Mesh) {
+					o.geometry.dispose();
+					if (o.material instanceof Material && o.material !== MAT_STATIC) {
+						const map = "map" in o.material ? o.material.map : null;
+						if (map instanceof Texture) map.dispose();
+					}
+				}
 			});
 		},
 	};
