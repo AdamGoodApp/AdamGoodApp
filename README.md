@@ -1,4 +1,4 @@
-# Adam Rais · AdamGoodApp
+# AdamGoodApp
 
 Senior Full-Stack Engineer in Tokyo — TypeScript, React/TanStack, three.js, AI/LLM systems.
 
