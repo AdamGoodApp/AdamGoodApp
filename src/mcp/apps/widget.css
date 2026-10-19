@@ -1,10 +1,22 @@
-@import "@fontsource/press-start-2p/latin.css";
 @import "tailwindcss" source(none);
 @source "../../components/ui";
 @source "../../components/hud/ZoneContent.tsx";
 @source "./";
 @import "tw-animate-css";
 @import "../../theme.css";
+
+/*
+ * MCP Apps hosts block data: fonts (font-src excludes data:), so the widget loads
+ * the font from the site; the resource declares the origin in _meta.ui.csp.
+ */
+@font-face {
+  font-family: "Press Start 2P";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url("https://adamgoodapp.com/fonts/press-start-2p-latin-400-normal.woff2")
+    format("woff2");
+}
 
 /* A color-scheme that differs from the host's makes Chrome paint an opaque iframe backdrop. */
 html {

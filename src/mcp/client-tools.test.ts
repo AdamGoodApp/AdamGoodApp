@@ -159,6 +159,41 @@ describe("city tools", () => {
 			vi.useRealTimers();
 		}
 	});
+
+	it("a new tour replaces the running one without clearing its highlight", async () => {
+		vi.useFakeTimers();
+		try {
+			const ctx = makeContext(fakeWorld());
+			const first = run(
+				"run_tour",
+				{ stops: [{ district: "downtown", seconds: 8 }] },
+				ctx,
+			);
+			await vi.advanceTimersByTimeAsync(100);
+			const second = run(
+				"run_tour",
+				{ stops: [{ district: "beach", seconds: 1 }] },
+				ctx,
+			);
+			expect(await first).toEqual({ ok: true, stops: 0, aborted: true });
+			expect(ctx.hover).toHaveBeenLastCalledWith("beach");
+			await vi.advanceTimersByTimeAsync(1_000);
+			expect(await second).toEqual({ ok: true, stops: 1 });
+			expect(ctx.hover).toHaveBeenLastCalledWith(null);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("keeps a tour under the 60 s client timeout", async () => {
+		await expect(
+			run(
+				"run_tour",
+				{ stops: [{ district: "downtown", seconds: 20 }] },
+				makeContext(fakeWorld()),
+			),
+		).rejects.toThrow();
+	});
 });
 
 describe("data tools", () => {

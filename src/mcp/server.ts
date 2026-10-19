@@ -30,6 +30,12 @@ import {
 
 export const CV_WIDGET_URI = "ui://adamgoodapp/cv-widget.html";
 
+/** The card fetches only its font, from the site (`public/fonts`, CORS-enabled). */
+const WIDGET_UI_META = {
+	prefersBorder: true,
+	csp: { resourceDomains: [SITE_URL] },
+};
+
 const INSTRUCTIONS = `Adam Rais's portfolio: his CV as an isometric city at ${SITE_URL}. Use get_profile, list_experience, list_skills, list_projects and search_cv for facts about Adam; get_district_content for a whole CV section; get_site_guide to explain the site. Results render as an interactive card in hosts that support MCP Apps. To drive the 3D city itself, open ${SITE_URL} in a browser with WebMCP.`;
 
 interface DataDefinition<I extends z.ZodObject, O extends z.ZodObject> {
@@ -119,7 +125,7 @@ export function createCityMcpServer(): McpServer {
 			description:
 				"Interactive card rendering Adam Rais's profile, CV sections, experience, skills, projects and search results",
 			mimeType: RESOURCE_MIME_TYPE,
-			_meta: { ui: { prefersBorder: true } },
+			_meta: { ui: WIDGET_UI_META },
 		},
 		async () => ({
 			contents: [
@@ -127,7 +133,7 @@ export function createCityMcpServer(): McpServer {
 					uri: CV_WIDGET_URI,
 					mimeType: RESOURCE_MIME_TYPE,
 					text: cvWidgetHtml,
-					_meta: { ui: { prefersBorder: true } },
+					_meta: { ui: WIDGET_UI_META },
 				},
 			],
 		}),
@@ -178,7 +184,7 @@ const CORS: Record<string, string> = {
 	"Access-Control-Allow-Origin": "*",
 	"Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
 	"Access-Control-Allow-Headers":
-		"Content-Type, Accept, Authorization, Mcp-Session-Id, Mcp-Protocol-Version, Last-Event-ID",
+		"Content-Type, Accept, Authorization, Mcp-Session-Id, Mcp-Protocol-Version, Mcp-Method, Mcp-Name, Last-Event-ID",
 	"Access-Control-Expose-Headers": "Mcp-Session-Id, Mcp-Protocol-Version",
 	"Access-Control-Max-Age": "86400",
 };
@@ -198,7 +204,16 @@ Resources: cv://profile, cv://sections/{district}, ${CV_WIDGET_URI} (MCP Apps ca
 /** Serves `/mcp`: CORS preflight, a plain-text page for browsers, MCP otherwise. */
 export async function handleMcpRequest(request: Request): Promise<Response> {
 	if (request.method === "OPTIONS") {
-		return new Response(null, { status: 204, headers: CORS });
+		// Echo the requested headers: MCP clients add new ones (v2 sends Mcp-Method/Mcp-Name).
+		const requested = request.headers.get("access-control-request-headers");
+		return new Response(null, {
+			status: 204,
+			headers: {
+				...CORS,
+				...(requested ? { "Access-Control-Allow-Headers": requested } : {}),
+				Vary: "Access-Control-Request-Headers",
+			},
+		});
 	}
 	if (
 		request.method === "GET" &&

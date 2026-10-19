@@ -49,6 +49,7 @@ function isFallback(): boolean {
 }
 
 let noticeSeq = 0;
+let activeTour: AbortController | null = null;
 
 /** Show the message bubble; `seconds > 0` hides it later unless replaced. */
 function notify(
@@ -171,11 +172,17 @@ export const CLIENT_TOOLS = [
 	runTour.client<CityToolContext>(async ({ stops, zoom }, ctx) => {
 		const w = world(ctx);
 		if (!w) return noCity;
-		const signal = ctx.abortSignal;
+		// A new tour (e.g. an agent retrying after a timeout) replaces the running one.
+		activeTour?.abort();
+		const tour = new AbortController();
+		activeTour = tour;
+		const signal = ctx.abortSignal
+			? AbortSignal.any([tour.signal, ctx.abortSignal])
+			: tour.signal;
 		let done = 0;
 		try {
 			for (const stop of stops) {
-				if (signal?.aborted) return { ok: true, stops: done, aborted: true };
+				if (signal.aborted) break;
 				const zone = ZONE_BY_ID[stop.district];
 				const seconds = stop.seconds ?? DEFAULT_TOUR_SECONDS;
 				w.focusZone(stop.district, zoom ?? DEFAULT_FOCUS_ZOOM);
@@ -186,12 +193,16 @@ export const CLIENT_TOOLS = [
 					seconds + 0.5,
 				);
 				await wait(seconds * 1000, signal);
+				if (signal.aborted) break;
 				done++;
 			}
 		} finally {
-			ctx.context.hover(null);
+			if (activeTour === tour) {
+				activeTour = null;
+				ctx.context.hover(null);
+			}
 		}
-		return signal?.aborted
+		return signal.aborted
 			? { ok: true, stops: done, aborted: true }
 			: { ok: true, stops: done };
 	}),

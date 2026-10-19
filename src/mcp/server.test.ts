@@ -90,12 +90,24 @@ describe("remote MCP server", () => {
 });
 
 describe("handleMcpRequest", () => {
-	it("answers CORS preflight", async () => {
+	it("answers CORS preflight, allowing the headers v2 clients send", async () => {
 		const res = await handleMcpRequest(
 			new Request("http://x/mcp", { method: "OPTIONS" }),
 		);
 		expect(res.status).toBe(204);
 		expect(res.headers.get("access-control-allow-origin")).toBe("*");
+		expect(res.headers.get("access-control-allow-headers")).toMatch(
+			/Mcp-Method.*Mcp-Name/,
+		);
+
+		const asked = "content-type, mcp-method, mcp-name, x-future";
+		const echoed = await handleMcpRequest(
+			new Request("http://x/mcp", {
+				method: "OPTIONS",
+				headers: { "Access-Control-Request-Headers": asked },
+			}),
+		);
+		expect(echoed.headers.get("access-control-allow-headers")).toBe(asked);
 	});
 
 	it("explains itself to browsers", async () => {

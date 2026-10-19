@@ -154,7 +154,7 @@ export const showMessage = toolDefinition({
 
 export const runTour = toolDefinition({
 	name: "run_tour",
-	description: `Guide the visitor through districts in order: the camera flies to each stop, highlights it and shows a caption (${DISTRICT_GUIDE}).`,
+	description: `Guide the visitor through districts in order: the camera flies to each stop, highlights it and shows a caption; a new tour replaces a running one (${DISTRICT_GUIDE}).`,
 	inputSchema: z.object({
 		stops: z
 			.array(
@@ -165,7 +165,8 @@ export const runTour = toolDefinition({
 						.max(200)
 						.optional()
 						.describe("Defaults to the district's tagline"),
-					seconds: z.number().min(1).max(20).default(DEFAULT_TOUR_SECONDS),
+					// 7 stops × 8 s stays under the MCP SDK's default 60 s request timeout.
+					seconds: z.number().min(1).max(8).default(DEFAULT_TOUR_SECONDS),
 				}),
 			)
 			.min(1)
