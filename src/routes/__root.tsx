@@ -1,4 +1,5 @@
 import { createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
+import { StaticFallback } from "#/components/StaticFallback";
 import appCss from "../styles.css?url";
 
 const TITLE = "AdamGoodApp — Adam Rais, Senior Full-Stack Engineer";
@@ -32,6 +33,7 @@ export const Route = createRootRoute({
 		],
 	}),
 	shellComponent: RootDocument,
+	errorComponent: StaticFallback,
 });
 
 function RootDocument({ children }: { children: React.ReactNode }) {

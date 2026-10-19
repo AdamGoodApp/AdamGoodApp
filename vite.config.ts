@@ -7,6 +7,15 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
 	resolve: { tsconfigPaths: true },
+	// Pre-bundle every three.js entry together so dev serves one copy of three.core.
+	optimizeDeps: {
+		include: [
+			"three",
+			"three/webgpu",
+			"three/tsl",
+			"three/addons/utils/BufferGeometryUtils.js",
+		],
+	},
 	plugins: [
 		cloudflare({ viteEnvironment: { name: "ssr" } }),
 		tailwindcss(),
