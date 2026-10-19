@@ -18,7 +18,7 @@ describe("pickZone", () => {
 		}
 	});
 
-	it("returns null over the park and the airport", () => {
+	it("returns null over the park and the arena", () => {
 		expect(pickZone(rayThrough(0, 0, 0))).toBeNull();
 		expect(pickZone(rayThrough(58, 0, -58))).toBeNull();
 	});

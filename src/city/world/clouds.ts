@@ -5,7 +5,7 @@ import { type Agent, Pool } from "../sim/agent";
 import { createBirds } from "../sim/birds";
 import type { BuildContext } from "./context";
 
-const COUNT = 8;
+const COUNT = 5;
 const DRIFT = 1.5;
 const WRAP_X = 170;
 
@@ -48,7 +48,7 @@ export function buildClouds(ctx: BuildContext): void {
 			),
 		);
 		yaws.push(ctx.rng.range(0, Math.PI * 2));
-		scales.push(ctx.rng.range(0.9, 1.7));
+		scales.push(ctx.rng.range(0.6, 1.1));
 	}
 	ctx.agents.push(new CloudAgent(pool, positions, yaws, scales));
 	createBirds(ctx);

@@ -8,6 +8,7 @@ import { chamfer, Polyline } from "./path";
 
 const ROLL = (4 * Math.PI) / 180;
 const SAIL_TINTS = [0xffffff, 0xffd6a5, 0xcfe8ff] as const;
+const BOATS_PER_ORBIT = 2;
 
 /** Sail loops stay in the water band west and south of the island (land is |x|,|z| < 92). */
 const ORBITS = [
@@ -114,10 +115,14 @@ function closestS(path: Polyline, target: Vector3): number {
 
 /** Sailboats (one pool) and the pier ferry (one pool): 2 draw calls. */
 export function createBoats(ctx: BuildContext): void {
-	const count = scaled(ORBITS.length, ctx.density);
+	const count = scaled(ORBITS.length * BOATS_PER_ORBIT, ctx.density);
 	const boats: Sail[] = [];
 	for (let i = 0; i < count; i++) {
-		boats.push({ orbit: i, angle: ctx.rng.range(0, Math.PI * 2) });
+		boats.push({
+			orbit: i % ORBITS.length,
+			angle:
+				Math.floor(i / ORBITS.length) * Math.PI + ctx.rng.range(0, Math.PI / 2),
+		});
 	}
 	const sails = new Pool(sailboat(), MAT_BOAT, count);
 	for (let i = 0; i < count; i++) sails.color(i, ctx.rng.pick(SAIL_TINTS));

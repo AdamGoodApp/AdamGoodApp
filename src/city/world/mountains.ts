@@ -3,16 +3,33 @@ import {
 	BufferGeometry,
 	CatmullRomCurve3,
 	Float32BufferAttribute,
+	IcosahedronGeometry,
 	Matrix4,
 	Vector3,
 } from "three";
-import { box, cyl, paint, paintBy, place } from "../geometry";
-import { ROCK, SNOW } from "../palette";
-import { house, pine } from "../prefabs";
+import {
+	box,
+	cone,
+	cyl,
+	GLOW,
+	glow,
+	merge,
+	paint,
+	paintBy,
+	place,
+	prism,
+} from "../geometry";
+import { TILE } from "../kit/atlas";
+import { facadeBox } from "../kit/facade";
+import { CARS, ROCK, SNOW } from "../palette";
+import { car, pine } from "../prefabs";
 import { mulberry32 } from "../rng";
+import { type CrowdSpot, createCrowd } from "../sim/crowd";
 import { Polyline } from "../sim/path";
 import { createLift, createSkiers } from "../sim/ski";
 import type { BuildContext } from "./context";
+import { CELL_Y, SIDEWALK_Y } from "./layout";
+import { tintWhite } from "./tint";
 
 interface PeakDef {
 	x: number;
@@ -37,10 +54,11 @@ const GRASS_LINE = 0.15;
 const ROCK_LINE = 0.55;
 const FOOT = 0x6f9c5a;
 
+/** Peaks keep to z < -47 so the south of the cell is flat ground for the ski village. */
 const PEAK_DEFS: readonly PeakDef[] = [
-	{ x: 0, z: -60, r: 24, h: 34, radial: 12, seed: 0x9e3779 },
-	{ x: -17, z: -42, r: 9, h: 14, radial: 8, seed: 0x51ed27 },
-	{ x: 19, z: -44, r: 8, h: 12, radial: 8, seed: 0x2f6b1d },
+	{ x: 0, z: -65.5, r: 18, h: 34, radial: 12, seed: 0x9e3779 },
+	{ x: -16.5, z: -58, r: 8, h: 13, radial: 8, seed: 0x51ed27 },
+	{ x: 18, z: -58, r: 7.5, h: 12, radial: 8, seed: 0x2f6b1d },
 ];
 
 /**
@@ -144,24 +162,22 @@ function peakGeometry(p: Peak): BufferGeometry {
 }
 
 // Ski lift: base → top along a straight line, 5 pylons.
-const LIFT_BASE = { x: 16, z: -38 };
-const LIFT_TOP = { x: 3, z: -57 };
+const LIFT_BASE = { x: 19.5, z: -44.5 };
+const LIFT_TOP = { x: 7, z: -61 };
 const PYLONS = 5;
 const PYLON_HEIGHT = 6;
 const CABLE_GAP = 1.2;
 
 const SKI_POINTS: readonly (readonly [number, number])[] = [
-	[4, -56],
-	[9, -52],
-	[3, -47],
-	[10, -42],
-	[13, -37],
-	[14, -34],
+	[3, -62],
+	[9, -57.5],
+	[4, -53],
+	[10.5, -49],
+	[13, -43],
+	[13.5, -38],
+	[13.5, -35.6],
 ];
 const SKI_SAMPLES = 80;
-
-const LODGE_HALF_X = 4.3;
-const LODGE_HALF_Z = 3.3;
 
 const lookMatrix = new Matrix4();
 const origin = new Vector3();
@@ -195,7 +211,7 @@ function skiPath(): Polyline {
 	for (const p of points) {
 		const h = terrainHeight(p.x, p.z);
 		// Hug the flat run-out, clear the facets on the slope.
-		p.y = h + 0.12 + 0.28 * Math.min(1, h / 2);
+		p.y = Math.max(CELL_Y + 0.05, h) + 0.12 + 0.28 * Math.min(1, h / 2);
 	}
 	return new Polyline(points, false);
 }
@@ -217,75 +233,18 @@ function segmentDistance(
 	return Math.hypot(px - (ax + dx * t), pz - (az + dz * t));
 }
 
-function rectDistance(
-	px: number,
-	pz: number,
-	cx: number,
-	cz: number,
-	hx: number,
-	hz: number,
-): number {
+interface Footprint {
+	x: number;
+	z: number;
+	hx: number;
+	hz: number;
+}
+
+function rectDistance(px: number, pz: number, r: Footprint): number {
 	return Math.hypot(
-		Math.max(Math.abs(px - cx) - hx, 0),
-		Math.max(Math.abs(pz - cz) - hz, 0),
+		Math.max(Math.abs(px - r.x) - r.hx, 0),
+		Math.max(Math.abs(pz - r.z) - r.hz, 0),
 	);
-}
-
-function nearPath(
-	path: Polyline,
-	x: number,
-	z: number,
-	hx = 0,
-	hz = 0,
-): number {
-	let best = Number.POSITIVE_INFINITY;
-	for (const p of path.points)
-		best = Math.min(best, rectDistance(p.x, p.z, x, z, hx, hz));
-	return best;
-}
-
-function lodgeFits(
-	x: number,
-	z: number,
-	maxTerrain: number,
-	path: Polyline,
-): boolean {
-	for (let ix = -2; ix <= 2; ix++) {
-		for (let iz = -1; iz <= 1; iz++) {
-			if (
-				terrainHeight(x + (ix * LODGE_HALF_X) / 2, z + iz * LODGE_HALF_Z) >
-				maxTerrain
-			)
-				return false;
-		}
-	}
-	if (nearPath(path, x, z, LODGE_HALF_X, LODGE_HALF_Z) < 2.5) return false;
-	for (let t = 0; t <= 1; t += 0.05) {
-		const lx = LIFT_BASE.x + (LIFT_TOP.x - LIFT_BASE.x) * t;
-		const lz = LIFT_BASE.z + (LIFT_TOP.z - LIFT_BASE.z) * t;
-		if (rectDistance(lx, lz, x, z, LODGE_HALF_X, LODGE_HALF_Z) < 3)
-			return false;
-	}
-	return true;
-}
-
-/** Closest buildable spot to (14, -37): flat ground, off the ski run and the lift. */
-function lodgeSpot(path: Polyline): { x: number; z: number } {
-	for (const maxTerrain of [1, 2, 3.5, 6]) {
-		let best: { x: number; z: number } | null = null;
-		let bestScore = Number.POSITIVE_INFINITY;
-		// Front edge stays at or north of z = -34.5 (avenue sidewalk).
-		for (let x = -21; x <= 21; x += 1) {
-			for (let z = -34.5 - LODGE_HALF_Z - 0.3; z >= -46; z -= 0.5) {
-				const score = Math.hypot(x - 14, z + 37);
-				if (score >= bestScore || !lodgeFits(x, z, maxTerrain, path)) continue;
-				best = { x, z };
-				bestScore = score;
-			}
-		}
-		if (best) return best;
-	}
-	return { x: 14, z: -38.1 };
 }
 
 function buildLift(statics: BufferGeometry[]): {
@@ -303,7 +262,7 @@ function buildLift(statics: BufferGeometry[]): {
 		const t = i / (PYLONS - 1);
 		const x = LIFT_BASE.x + dx * t;
 		const z = LIFT_BASE.z + dz * t;
-		const base = terrainHeight(x, z);
+		const base = Math.max(CELL_Y, terrainHeight(x, z));
 		statics.push(
 			cyl(0.25, 0.3, PYLON_HEIGHT, 6, 0x555555, x, base, z),
 			box(
@@ -342,37 +301,363 @@ function buildLift(statics: BufferGeometry[]): {
 	return { up: new Polyline(up, false), down: new Polyline(down, false) };
 }
 
-export function buildMountains(ctx: BuildContext): void {
-	const out = ctx.statics;
+// --- Ski village -----------------------------------------------------------
+
+const VILLAGE_Z0 = -48;
+const VILLAGE_Z1 = -34.5;
+const SNOW_GROUND = 0xeaf0f4;
+const TIMBER = 0x5a3a22;
+const PAVED = 0xcfd3d6;
+const CHALET_TILES = [
+	TILE.stoneWhite,
+	TILE.houseBrick,
+	TILE.sidingYellow,
+	TILE.brickBrown,
+] as const;
+const CHALET_TINTS = [0xffffff, 0xf3e6d2, 0xe9d8c0] as const;
+const CHALET_ROOFS = [0x3f3a38, 0x4a3b33, 0x2f3a46, 0x5a2f2a] as const;
+const LANE_Z = -42;
+const PARKING = { x: -21.9, z: -40.95, hx: 3.6, hz: 5.65 };
+
+const FOOTPRINT_MARGIN = 1.4;
+
+/** Highest terrain under a footprint, or null when the ground is too steep to build on. */
+function groundAt(x: number, z: number, w: number, d: number): number | null {
+	let top = CELL_Y;
+	for (let ix = -1; ix <= 1; ix++) {
+		for (let iz = -1; iz <= 1; iz++) {
+			top = Math.max(top, terrainHeight(x + (ix * w) / 2, z + (iz * d) / 2));
+		}
+	}
+	return top > 1.6 ? null : top;
+}
+
+/** Timber-and-stone chalet: gable to the front (+Z), steep dark roof under a snow cap. */
+function chalet(
+	ctx: BuildContext,
+	blocked: Footprint[],
+	x: number,
+	z: number,
+	w: number,
+	d: number,
+	floors: number,
+): void {
 	const { rng } = ctx;
+	const y = groundAt(x, z, w, d);
+	if (y === null) return;
+	const h = floors * 3;
+	const rh = Math.min(4.2, w * 0.55);
+	const roof = rng.pick(CHALET_ROOFS);
+	ctx.facades.push(
+		place(
+			facadeBox(w, d, h, {
+				upper: rng.pick(CHALET_TILES),
+				floor: 3,
+				seed: rng.int(1, 9999),
+				tint: rng.pick(CHALET_TINTS),
+			}),
+			{ x, y, z },
+		),
+	);
+	const cx = w * 0.22;
+	const parts: BufferGeometry[] = [
+		box(w + 0.3, 0.5, d + 0.3, 0x8d8f8a, 0, -0.3),
+		box(w + 1, 0.2, d + 1, 0x2f2a28, 0, h - 0.05),
+		prism(w + 1, rh, d + 1, roof, 0, h + 0.1),
+		prism(w + 1, rh, d + 0.4, SNOW, 0, h + 0.22),
+		box(0.6, rh * 0.8, 0.6, 0x7d6f66, cx, h, -d * 0.2),
+		box(0.8, 0.12, 0.8, SNOW, cx, h + rh * 0.8, -d * 0.2),
+		box(0.95, 2.1, 0.08, TIMBER, -w * 0.18, 0, d / 2 + 0.04),
+		glow(
+			box(0.2, 0.25, 0.1, 0xffe2a0, -w * 0.18 + 0.8, 1.9, d / 2 + 0.08),
+			GLOW.night,
+		),
+	];
+	for (const sx of [-1, 1]) {
+		for (const sz of [-1, 1]) {
+			parts.push(box(0.2, h, 0.2, TIMBER, (sx * w) / 2, 0, (sz * d) / 2));
+		}
+	}
+	if (floors >= 2) {
+		parts.push(
+			box(w + 0.2, 0.2, d + 0.2, TIMBER, 0, 2.9),
+			box(w * 0.6, 0.12, 0.7, 0x8a5a3c, 0, 3, d / 2 + 0.35),
+			box(w * 0.6, 0.5, 0.06, TIMBER, 0, 3.12, d / 2 + 0.68),
+		);
+	}
+	ctx.statics.push(place(merge(parts), { x, y, z }));
+	blocked.push({
+		x,
+		z,
+		hx: w / 2 + FOOTPRINT_MARGIN,
+		hz: d / 2 + FOOTPRINT_MARGIN,
+	});
+}
 
-	for (const p of PEAKS) out.push(peakGeometry(p));
+/** Three-storey stone lodge with a steep snowy roof, dormer, canopy and neon sign. */
+function lodge(
+	ctx: BuildContext,
+	blocked: Footprint[],
+	x: number,
+	z: number,
+	w: number,
+	d: number,
+): void {
+	const floors = 3;
+	const h = floors * 3.2;
+	ctx.facades.push(
+		place(
+			facadeBox(w, d, h, {
+				upper: TILE.stoneWhite,
+				ground: TILE.lobby,
+				seed: ctx.rng.int(1, 9999),
+				tint: 0xf0e2c8,
+			}),
+			{ x, y: CELL_Y, z },
+		),
+	);
+	const rh = 4.2;
+	const parts: BufferGeometry[] = [
+		box(w + 0.3, 0.5, d + 0.3, 0x8d8f8a, 0, -0.3),
+		box(w + 1.2, 0.2, d + 1.2, 0x2f2a28, 0, h - 0.05),
+		prism(w + 1.2, rh, d + 1.2, 0x3f3a38, 0, h + 0.1),
+		prism(w + 1.2, rh, d + 0.6, SNOW, 0, h + 0.24),
+		box(3.4, 1.8, 2, 0xf0e2c8, 0, h + 0.3, d / 2 - 0.6),
+		prism(3.8, 1.5, 2.2, 0x3f3a38, 0, h + 2.1, d / 2 - 0.6),
+		prism(3.8, 1.5, 1.8, SNOW, 0, h + 2.22, d / 2 - 0.6),
+		glow(box(1.6, 0.9, 0.05, 0xffd27a, 0, h + 0.8, d / 2 + 0.42), GLOW.night),
+		box(0.7, 2.6, 0.7, 0x7d6f66, w * 0.3, h, -d * 0.25),
+		box(0.9, 0.12, 0.9, SNOW, w * 0.3, h + 2.6, -d * 0.25),
+		box(3.4, 0.2, 0.7, TIMBER, 0, 3.1, d / 2 + 0.35),
+		box(0.15, 3.1, 0.15, TIMBER, -1.6, 0, d / 2 + 0.55),
+		box(0.15, 3.1, 0.15, TIMBER, 1.6, 0, d / 2 + 0.55),
+		glow(box(2.4, 0.4, 0.1, 0x4cf0ff, 0, 3.45, d / 2 + 0.5), GLOW.always),
+	];
+	for (const sx of [-1, 1]) {
+		for (const sz of [-1, 1]) {
+			parts.push(box(0.24, h, 0.24, TIMBER, (sx * w) / 2, 0, (sz * d) / 2));
+		}
+	}
+	ctx.statics.push(place(merge(parts), { x, y: CELL_Y, z }));
+	blocked.push({
+		x,
+		z,
+		hx: w / 2 + FOOTPRINT_MARGIN,
+		hz: d / 2 + FOOTPRINT_MARGIN,
+	});
+}
 
-	const path = skiPath();
-	const lodge = lodgeSpot(path);
-	out.push(place(house(8, 6, 0x8a5a3c, 0x5f6f87), { x: lodge.x, z: lodge.z }));
+function snowman(x: number, z: number, ry: number): BufferGeometry {
+	return place(
+		merge([
+			place(paint(new IcosahedronGeometry(0.5, 0), 0xffffff), { y: 0.5 }),
+			place(paint(new IcosahedronGeometry(0.38, 0), 0xffffff), { y: 1.25 }),
+			place(paint(new IcosahedronGeometry(0.28, 0), 0xffffff), { y: 1.85 }),
+			place(cone(0.05, 0.35, 5, 0xf28c28), {
+				rx: Math.PI / 2,
+				y: 1.85,
+				z: 0.2,
+			}),
+			cyl(0.2, 0.2, 0.3, 8, 0x222222, 0, 2.05, 0),
+			cyl(0.3, 0.3, 0.04, 8, 0x222222, 0, 2.05, 0),
+			box(1, 0.05, 0.05, TIMBER, 0, 1.3, 0),
+			box(0.4, 0.08, 0.08, 0xe8463c, 0, 1.55, 0.3),
+		]),
+		{ x, y: CELL_Y + 0.05, z, ry },
+	);
+}
 
-	const lift = buildLift(out);
+function buildParking(ctx: BuildContext): CrowdSpot[] {
+	const { rng, statics } = ctx;
+	const { x, z, hx, hz } = PARKING;
+	statics.push(box(2 * hx, 0.06, 2 * hz, 0x4a4d52, x, CELL_Y, z));
+	for (let k = 0; k <= 3; k++) {
+		for (const lz of [-37.7, -43.9]) {
+			statics.push(
+				box(
+					0.1,
+					0.01,
+					4.4,
+					0xffffff,
+					x - hx + 0.1 + k * 2.4,
+					CELL_Y + 0.06,
+					lz,
+				),
+			);
+		}
+	}
+	const spots: CrowdSpot[] = [];
+	for (const [row, lz] of [-37.7, -43.9].entries()) {
+		for (let bay = 0; bay < 3; bay++) {
+			if (rng() < 0.2) continue;
+			const bx = x - hx + 1.3 + bay * 2.4;
+			statics.push(
+				place(tintWhite(car(), rng.pick(CARS)), {
+					x: bx,
+					y: CELL_Y + 0.06,
+					z: lz,
+					ry: row === 0 ? Math.PI : 0,
+				}),
+			);
+		}
+	}
+	spots.push({ x: x + 0.2, z: -41, y: CELL_Y + 0.06 });
+	spots.push({ x: x + 2, z: -41.2, y: CELL_Y + 0.06 });
+	return spots;
+}
 
+/** Chalets, lodge, car park and lanes at the foot of the mountain; returns standing-crowd spots. */
+function buildVillage(ctx: BuildContext, blocked: Footprint[]): CrowdSpot[] {
+	const { statics, rng } = ctx;
+	const y = CELL_Y;
+	const depth = VILLAGE_Z1 - VILLAGE_Z0;
+	statics.push(
+		box(51, 0.05, depth, SNOW_GROUND, 0, y, (VILLAGE_Z0 + VILLAGE_Z1) / 2),
+	);
+	const spots = buildParking(ctx);
+	blocked.push(PARKING);
+
+	// Row A faces the avenue; row B stands behind it.
+	const rowA: [number, number, number][] = [
+		[-14.7, 6.6, 2],
+		[-7, 6.4, 2],
+		[-0.7, 6, 2],
+		[23.2, 4.6, 2],
+	];
+	for (const [x, w, floors] of rowA)
+		chalet(ctx, blocked, x, -38.4, w, 6, floors);
+	const rowB: [number, number, number][] = [
+		[-14.7, 6.6, 2],
+		[-7, 6.4, 3],
+		[-0.5, 6.4, 2],
+		[6.3, 6.4, 2],
+	];
+	for (const [x, w, floors] of rowB) chalet(ctx, blocked, x, -45, w, 5, floors);
+	lodge(ctx, blocked, 6.7, -38.5, 8.2, 6.8);
+	chalet(ctx, blocked, 18.6, -38.5, 3.6, 4, 1);
+	statics.push(
+		glow(box(3, 0.5, 0.1, 0xff4fa3, 18.6, 2.6, -36.4), GLOW.always),
+		box(0.1, 1.6, 0.1, 0x8a8f96, 17.6, 0.1, -35.7),
+		box(0.1, 1.6, 0.1, 0x8a8f96, 19.6, 0.1, -35.7),
+		box(2.2, 0.1, 0.1, 0x8a8f96, 18.6, 1.7, -35.7),
+	);
+
+	// Lift base station next to the first pylon.
+	statics.push(
+		box(3.2, 2.8, 3.4, 0x777f86, 22.4, y, -44.8),
+		box(3.8, 0.3, 4, 0xe8463c, 22.4, y + 2.8, -44.8),
+		box(3.6, 0.12, 3.8, SNOW, 22.4, y + 3.1, -44.8),
+		glow(box(2, 0.4, 0.1, 0x4cf0ff, 22.4, y + 1.8, -43.05), GLOW.always),
+	);
+	blocked.push({ x: 22.4, z: -44.8, hx: 3.2, hz: 3.4 });
+
+	// Lanes: behind the front row, between chalets and along the lodge.
+	const lanes: [number, number, number, number][] = [
+		[-18, LANE_Z, 11.2, LANE_Z],
+		[-10.8, VILLAGE_Z1 - 0.2, -10.8, LANE_Z],
+		[11.2, VILLAGE_Z1 - 0.2, 11.2, LANE_Z],
+	];
+	for (const [x0, z0, x1, z1] of lanes) {
+		const len = Math.hypot(x1 - x0, z1 - z0);
+		statics.push(
+			box(
+				x0 === x1 ? 1.2 : len,
+				0.08,
+				x0 === x1 ? len : 1.2,
+				PAVED,
+				(x0 + x1) / 2,
+				y,
+				(z0 + z1) / 2,
+			),
+		);
+		ctx.sidewalks.push(
+			new Polyline(
+				[new Vector3(x0, SIDEWALK_Y, z0), new Vector3(x1, SIDEWALK_Y, z1)],
+				false,
+			),
+		);
+		blocked.push({
+			x: (x0 + x1) / 2,
+			z: (z0 + z1) / 2,
+			hx: Math.abs(x1 - x0) / 2 + 0.6,
+			hz: Math.abs(z1 - z0) / 2 + 0.6,
+		});
+	}
+
+	for (const [x, z] of [
+		[12, -36.6],
+		[16.1, -41.6],
+		[-24.4, -34.9],
+	] as const) {
+		statics.push(snowman(x, z, rng.range(-0.5, 0.5) + Math.PI / 6));
+	}
+
+	const feet = SIDEWALK_Y - 0.03;
+	for (const x of [-15, -7, 0, 3.5, 6.5, 9.5, 23]) {
+		spots.push({ x, z: -35, y: feet });
+	}
+	for (let i = 0; i < 6; i++) {
+		spots.push({
+			x: 12 + (i % 3) * 1.5,
+			z: -37 - Math.floor(i / 3) * 4,
+			y: CELL_Y + 0.05,
+		});
+	}
+	for (let i = 0; i < 5; i++) {
+		spots.push({
+			x: 19.2 + (i % 2) * 0.9,
+			z: -41.2 - i * 0.7,
+			y: CELL_Y + 0.05,
+		});
+	}
+	for (let x = -17; x <= 9; x += 3.5) {
+		spots.push({ x, z: LANE_Z, y: feet });
+	}
+	return spots;
+}
+
+function scatterPines(
+	ctx: BuildContext,
+	path: Polyline,
+	blocked: readonly Footprint[],
+): void {
+	const { rng, statics } = ctx;
 	const pines: { x: number; z: number }[] = [];
-	for (let attempt = 0; attempt < 900 && pines.length < 30; attempt++) {
-		const x = rng.range(-25, 25);
-		const z = rng.range(-82, -35.5);
+	for (let attempt = 0; attempt < 7000 && pines.length < 140; attempt++) {
+		const x = rng.range(-23.8, 23.8);
+		const z = rng.range(-80.5, -36);
 		const h = terrainHeight(x, z);
 		if (h >= 3) continue;
-		if (rectDistance(x, z, lodge.x, lodge.z, LODGE_HALF_X, LODGE_HALF_Z) < 2.5)
-			continue;
+		if (blocked.some((r) => rectDistance(x, z, r) < 0.6)) continue;
 		if (
 			segmentDistance(x, z, LIFT_BASE.x, LIFT_BASE.z, LIFT_TOP.x, LIFT_TOP.z) <
 			3
 		)
 			continue;
-		if (nearPath(path, x, z) < 2.5) continue;
-		if (pines.some((q) => Math.hypot(q.x - x, q.z - z) < 2.4)) continue;
+		let near = Number.POSITIVE_INFINITY;
+		for (const p of path.points)
+			near = Math.min(near, Math.hypot(p.x - x, p.z - z));
+		if (near < 3) continue;
+		if (pines.some((q) => Math.hypot(q.x - x, q.z - z) < 1.9)) continue;
 		pines.push({ x, z });
-		out.push(place(pine(rng.range(0.8, 1.3)), { x, y: h, z }));
+		statics.push(
+			place(pine(rng.range(0.8, 1.4)), { x, y: Math.max(h, CELL_Y), z }),
+		);
 	}
+}
+
+export function buildMountains(ctx: BuildContext): void {
+	const out = ctx.statics;
+
+	for (const p of PEAKS) out.push(peakGeometry(p));
+
+	const path = skiPath();
+	const lift = buildLift(out);
+	const blocked: Footprint[] = [];
+	const spots = buildVillage(ctx, blocked);
+	scatterPines(ctx, path, blocked);
 
 	createSkiers(ctx, path);
 	createLift(ctx, lift.up, lift.down);
+	createCrowd(ctx, spots, { count: 34, spread: 0.45 });
 }

@@ -1,7 +1,7 @@
 import { Vector3 } from "three";
 import { MAT_INSTANCED } from "../geometry";
-import { SHIRTS } from "../palette";
-import { dog, person } from "../prefabs";
+import { BRIGHTS, SHIRTS } from "../palette";
+import { cyclist, dog, person } from "../prefabs";
 import { mulberry32, type Rng } from "../rng";
 import type { BuildContext } from "../world/context";
 import { type Agent, Pool, scaled } from "./agent";
@@ -143,6 +143,9 @@ interface Walker {
 	ox: number;
 	oz: number;
 	yaw: number;
+	/** Footfall bounce: radians per second and height (0 for riders). */
+	bobRate: number;
+	bobAmp: number;
 }
 
 class StreetWalkers {
@@ -168,7 +171,7 @@ class StreetWalkers {
 			w.oz += (this.tangent.x * w.lat - w.oz) * k;
 			this.point.x += w.ox;
 			this.point.z += w.oz;
-			this.point.y += Math.abs(Math.sin(t * 10 + w.index)) * BOB;
+			this.point.y += Math.abs(Math.sin(t * w.bobRate + w.index)) * w.bobAmp;
 			w.yaw = approachAngle(
 				w.yaw,
 				Math.atan2(this.tangent.x * w.dir, this.tangent.z * w.dir),
@@ -408,6 +411,75 @@ class PeopleAgent implements Agent {
 	}
 }
 
+interface WalkerKind {
+	speed: readonly [number, number];
+	lateral: number;
+	bobRate: number;
+	bobAmp: number;
+}
+
+const WALKING: WalkerKind = {
+	speed: [1.2, 1.6],
+	lateral: LATERAL,
+	bobRate: 10,
+	bobAmp: BOB,
+};
+const JOGGING: WalkerKind = {
+	speed: [2.8, 3.6],
+	lateral: LATERAL,
+	bobRate: 17,
+	bobAmp: 0.09,
+};
+const CYCLING: WalkerKind = {
+	speed: [4, 5.5],
+	lateral: 0.3,
+	bobRate: 0,
+	bobAmp: 0,
+};
+
+/** Scatters `count` walkers of one kind over the sidewalk network, weighted by sidewalk length. */
+function spawnWalkers(
+	net: Net,
+	rng: Rng,
+	kind: WalkerKind,
+	count: number,
+	first: number,
+): Walker[] {
+	const sumLen = net.lines.reduce((a, l) => a + l.length, 0);
+	const tangent = new Vector3();
+	const walkers: Walker[] = [];
+	for (let i = 0; i < count; i++) {
+		let pick = rng.range(0, sumLen);
+		let li = 0;
+		while (
+			li < net.lines.length - 1 &&
+			pick > (net.lines[li] as Polyline).length
+		) {
+			pick -= (net.lines[li] as Polyline).length;
+			li += 1;
+		}
+		const line = net.lines[li] as Polyline;
+		const s = rng.range(0, line.length);
+		const dir = rng.range(0, 1) < 0.5 ? 1 : -1;
+		const lat = rng.range(-kind.lateral, kind.lateral);
+		line.tangentAt(s, tangent);
+		walkers.push({
+			index: first + i,
+			line: li,
+			s,
+			dir,
+			speed: rng.range(kind.speed[0], kind.speed[1]),
+			lat,
+			ox: -tangent.z * lat,
+			oz: tangent.x * lat,
+			yaw: Math.atan2(tangent.x * dir, tangent.z * dir),
+			bobRate: kind.bobRate,
+			bobAmp: kind.bobAmp,
+		});
+	}
+	return walkers;
+}
+
 export function createPeople(ctx: BuildContext): void {
 	const { rng } = ctx;
 	const rnd = mulberry32(Math.floor(rng() * 0x100000000));
@@ -415,51 +487,46 @@ export function createPeople(ctx: BuildContext): void {
 	const loop = ctx.residentialLoop;
 	const park = ctx.parkLoop;
 
-	const nStreet = net.lines.length > 0 ? scaled(150, ctx.density) : 0;
+	const hasNet = net.lines.length > 0;
+	const nWalk = hasNet ? scaled(232, ctx.density) : 0;
+	const nJog = hasNet ? scaled(28, ctx.density) : 0;
+	const nCyclists = hasNet ? scaled(6, ctx.density) : 0;
+	const nStreet = nWalk + nJog;
 	const nRes =
 		loop && ctx.residentialDoors.length > 0 ? scaled(20, ctx.density) : 0;
 	const nPark = park ? scaled(4, ctx.density) : 0;
 	const total = nStreet + nRes + nPark;
-	if (total === 0) return;
+	if (total === 0 && nCyclists === 0) return;
 
 	const people = new Pool(person(), MAT_INSTANCED, total);
-	for (let i = 0; i < total; i++) people.color(i, rng.pick(SHIRTS));
+	for (let i = 0; i < total; i++)
+		people.color(i, rng.pick(i >= nWalk && i < nStreet ? BRIGHTS : SHIRTS));
 	const parts: Agent[] = [];
 	const pools = [people];
 	const scratch = new Vector3();
 	const tangent = new Vector3();
 
 	if (nStreet > 0) {
-		const sumLen = net.lines.reduce((a, l) => a + l.length, 0);
-		const walkers: Walker[] = [];
-		for (let i = 0; i < nStreet; i++) {
-			let pick = rng.range(0, sumLen);
-			let li = 0;
-			while (
-				li < net.lines.length - 1 &&
-				pick > (net.lines[li] as Polyline).length
-			) {
-				pick -= (net.lines[li] as Polyline).length;
-				li += 1;
-			}
-			const line = net.lines[li] as Polyline;
-			const s = rng.range(0, line.length);
-			const dir = rng.range(0, 1) < 0.5 ? 1 : -1;
-			const lat = rng.range(-LATERAL, LATERAL);
-			line.tangentAt(s, tangent);
-			walkers.push({
-				index: i,
-				line: li,
-				s,
-				dir,
-				speed: rng.range(1.2, 1.6),
-				lat,
-				ox: -tangent.z * lat,
-				oz: tangent.x * lat,
-				yaw: Math.atan2(tangent.x * dir, tangent.z * dir),
-			});
-		}
+		const walkers = [
+			...spawnWalkers(net, rng, WALKING, nWalk, 0),
+			...spawnWalkers(net, rng, JOGGING, nJog, nWalk),
+		];
 		parts.push(new StreetWalkers(net, walkers, people, rnd));
+	}
+
+	if (nCyclists > 0) {
+		const bikes = new Pool(cyclist(), MAT_INSTANCED, nCyclists);
+		for (let i = 0; i < nCyclists; i++) bikes.color(i, rng.pick(BRIGHTS));
+		parts.push(
+			new StreetWalkers(
+				net,
+				spawnWalkers(net, rng, CYCLING, nCyclists, 0),
+				bikes,
+				rnd,
+			),
+		);
+		pools.push(bikes);
+		ctx.group.add(bikes.mesh);
 	}
 
 	if (loop && nRes > 0) {

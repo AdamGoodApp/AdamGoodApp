@@ -66,14 +66,14 @@ class SkiAgent implements Agent {
 	}
 }
 
-/** 5 skiers + 3 snowboarders sliding down `path`, two Pools → two draw calls. */
+/** 7 skiers + 4 snowboarders sliding down `path`, two Pools → two draw calls. */
 export function createSkiers(ctx: BuildContext, path: Polyline): void {
 	const { rng } = ctx;
-	const skiers = new Pool(skier(), MAT_INSTANCED, scaled(5, ctx.density));
+	const skiers = new Pool(skier(), MAT_INSTANCED, scaled(7, ctx.density));
 	const boarders = new Pool(
 		snowboarder(),
 		MAT_INSTANCED,
-		scaled(3, ctx.density),
+		scaled(4, ctx.density),
 	);
 	const riders: Rider[] = [];
 	const total = skiers.count + boarders.count;
@@ -142,7 +142,7 @@ export function createLift(
 	up: Polyline,
 	down: Polyline,
 ): void {
-	const pool = new Pool(liftChair(), MAT_INSTANCED, scaled(10, ctx.density));
+	const pool = new Pool(liftChair(), MAT_INSTANCED, scaled(14, ctx.density));
 	ctx.group.add(pool.mesh);
 	const agent = new LiftAgent(pool, up, down);
 	agent.update(0, 0);

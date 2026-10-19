@@ -1,11 +1,10 @@
 import { type BufferGeometry, MathUtils, Vector3 } from "three";
 import { box, MAT_INSTANCED, merge, place } from "../geometry";
-import { cow, sheep, tractor } from "../prefabs";
+import { cow, sheep } from "../prefabs";
 import type { Rng } from "../rng";
 import type { BuildContext } from "../world/context";
 import { CELL_Y } from "../world/layout";
 import { type Agent, Pool, scaled } from "./agent";
-import { chamfer, Polyline, rectLoop } from "./path";
 
 export interface Rect {
 	minX: number;
@@ -19,7 +18,6 @@ export const FARM_Y = CELL_Y + 0.04;
 
 const INSET = 1.5;
 const WALK_SPEED = 0.6;
-const TRACTOR_SPEED = 2;
 const BOB = MathUtils.degToRad(3);
 const TURN_RATE = 5;
 const COW_TINTS = [0xffffff, 0xffffff, 0xf0e0d0, 0xd9b99a] as const;
@@ -122,25 +120,6 @@ class GrazingAgent implements Agent {
 	}
 }
 
-class TractorAgent implements Agent {
-	private s = 0;
-	private readonly pos = new Vector3();
-	private readonly dir = new Vector3();
-
-	constructor(
-		private readonly pool: Pool,
-		private readonly loop: Polyline,
-	) {}
-
-	update(dt: number): void {
-		this.s += TRACTOR_SPEED * dt;
-		this.loop.pointAt(this.s, this.pos);
-		this.loop.tangentAt(this.s, this.dir);
-		this.pool.write(0, this.pos, Math.atan2(this.dir.x, this.dir.z));
-		this.pool.commit();
-	}
-}
-
 function grazers(
 	ctx: BuildContext,
 	geo: BufferGeometry,
@@ -158,34 +137,13 @@ function grazers(
 	ctx.agents.push(agent);
 }
 
-/** Cows, sheep and the tractor; 3 pools → 3 draw calls. */
+/** Cows and sheep grazing their pastures; 2 pools → 2 draw calls. */
 export function createFarm(
 	ctx: BuildContext,
-	areas: { cows: Rect; sheep: Rect; field: Rect },
+	areas: { cows: Rect; sheep: Rect },
 ): void {
-	grazers(ctx, cow(), areas.cows, 8, COW_TINTS);
-	grazers(ctx, sheep(), areas.sheep, 12);
-
-	const { field } = areas;
-	const loop = new Polyline(
-		chamfer(
-			rectLoop(
-				field.minX + INSET,
-				field.maxX - INSET,
-				field.minZ + INSET,
-				field.maxZ - INSET,
-				FARM_Y,
-				true,
-			),
-			2,
-		),
-		true,
-	);
-	const pool = new Pool(tractor(), MAT_INSTANCED, 1);
-	ctx.group.add(pool.mesh);
-	const agent = new TractorAgent(pool, loop);
-	agent.update(0);
-	ctx.agents.push(agent);
+	grazers(ctx, cow(), areas.cows, 4, COW_TINTS);
+	grazers(ctx, sheep(), areas.sheep, 6);
 }
 
 /** Four arms with sails and a hub, facing +Z, spinning about local Z. */

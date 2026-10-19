@@ -4,15 +4,16 @@ import { facadeMaterial } from "../kit/facade";
 import type { Rng } from "../rng";
 import type { Agent } from "../sim/agent";
 import { createPeople } from "../sim/people";
+import { createSkyTraffic } from "../sim/sky";
 import { createTraffic } from "../sim/traffic";
-import { createWindowPool } from "../sim/windows";
-import { buildAirport } from "./airport";
+import { buildArena } from "./arena";
 import { buildBeach } from "./beach";
 import { buildClouds } from "./clouds";
 import { buildCommercial } from "./commercial";
 import type { BuildContext } from "./context";
 import { buildDowntown } from "./downtown";
 import { buildGround } from "./ground";
+import { buildHospital } from "./hospital";
 import { buildMountains } from "./mountains";
 import { buildOcean } from "./ocean";
 import { buildPark } from "./park";
@@ -36,7 +37,6 @@ export function buildWorld(rng: Rng, density: number): BuiltWorld {
 		facades: [],
 		group,
 		agents: [],
-		windows: [],
 		sidewalks: [],
 		residentialDoors: [],
 		residentialLoop: null,
@@ -52,15 +52,16 @@ export function buildWorld(rng: Rng, density: number): BuiltWorld {
 	buildThemePark(ctx);
 	buildRural(ctx);
 	buildMountains(ctx);
-	buildAirport(ctx);
+	buildArena(ctx);
+	buildHospital(ctx);
 	buildPark(ctx);
 	buildOcean(ctx);
 	buildClouds(ctx);
 
 	// Shared pools read what the district builders registered.
-	ctx.agents.push(createWindowPool(ctx));
 	createTraffic(ctx);
 	createPeople(ctx);
+	createSkyTraffic(ctx);
 
 	const staticMesh = new Mesh(merge(ctx.statics), MAT_STATIC);
 	staticMesh.castShadow = true;

@@ -29,55 +29,6 @@ const GLASS = 0x2b3a4a;
 const SKIN = 0xf1c9a5;
 const TROUSERS = 0x2b2b2b;
 
-export function tower(
-	w: number,
-	d: number,
-	h: number,
-	facade: number,
-): BufferGeometry {
-	const parts = [
-		box(w, h, d, facade),
-		box(w + 0.4, 0.6, d + 0.4, darken(facade, 0.8), 0, h),
-		box(w * 0.3, 2, d * 0.3, darken(facade, 0.7), w * 0.15, h + 0.6, -d * 0.15),
-	];
-	if (h >= 30)
-		parts.push(cyl(0.1, 0.1, 4, 6, 0x777777, -w * 0.2, h + 0.6, d * 0.2));
-	return merge(parts);
-}
-
-export function shop(
-	w: number,
-	d: number,
-	h: number,
-	wall: number,
-	awning: number,
-): BufferGeometry {
-	return merge([
-		box(w, h, d, wall),
-		box(w * 0.8, 0.25, 1.6, awning, 0, 3, d / 2 + 0.8),
-		box(1.2, 2.2, 0.1, 0x3a2f2a, -w * 0.25, 0, d / 2 + 0.05),
-		box(w * 0.4, 1.6, 0.08, GLASS, w * 0.15, 0.6, d / 2 + 0.04),
-		box(3.6, 0.9, 0.15, WHITE, 0, 4.2, d / 2 + 0.08),
-		box(w + 0.3, 0.4, d + 0.3, darken(wall, 0.85), 0, h),
-	]);
-}
-
-export function house(
-	w: number,
-	d: number,
-	wall: number,
-	roof: number,
-): BufferGeometry {
-	return merge([
-		box(w, 3.5, d, wall),
-		prism(w + 0.6, 2, d + 0.6, roof, 0, 3.5),
-		box(0.6, 1.4, 0.6, 0x7a6b66, w * 0.25, 4.2, -d * 0.2),
-		box(1, 2, 0.1, 0x6b4a33, 0, 0, d / 2 + 0.05),
-		box(1.2, 1, 0.08, GLASS, -w * 0.3, 1.4, d / 2 + 0.04),
-		box(1.2, 1, 0.08, GLASS, w * 0.3, 1.4, d / 2 + 0.04),
-	]);
-}
-
 export function pine(s = 1): BufferGeometry {
 	return merge([
 		cyl(0.25 * s, 0.3 * s, 1.2 * s, 6, TRUNK),
@@ -424,4 +375,85 @@ export function cloud(radii: number[]): BufferGeometry {
 	const geo = merge(parts);
 	geo.translate(-x / 2, 0, 0);
 	return geo;
+}
+
+/** Protest sign on a stick (base y = 0, faces +Z); the board is WHITE so instance colours tint it. */
+export function placard(): BufferGeometry {
+	return merge([
+		box(0.05, 1.6, 0.05, 0x8a6a40),
+		box(0.9, 0.62, 0.05, WHITE, 0, 1.45),
+		box(0.62, 0.1, 0.07, 0x222222, 0, 1.78),
+		box(0.46, 0.1, 0.07, 0x222222, 0, 1.58),
+	]);
+}
+
+/** Cyclist riding toward +Z (base y = 0); the jersey is WHITE so instance colours tint it. */
+export function cyclist(): BufferGeometry {
+	const wheel = (z: number) =>
+		place(cyl(0.34, 0.34, 0.06, 8, DARK, 0, -0.03, 0), {
+			rz: Math.PI / 2,
+			y: 0.34,
+			z,
+		});
+	return merge([
+		wheel(0.55),
+		wheel(-0.55),
+		box(0.06, 0.07, 1.1, 0x2a6fd6, 0, 0.45, 0),
+		box(0.05, 0.4, 0.05, 0x2a6fd6, 0, 0.45, 0.5),
+		box(0.5, 0.05, 0.05, DARK, 0, 0.88, 0.5),
+		box(0.14, 0.08, 0.3, DARK, 0, 0.84, -0.25),
+		place(box(0.36, 0.55, 0.24, WHITE, 0, 0, 0), {
+			rx: 0.55,
+			y: 0.9,
+			z: -0.15,
+		}),
+		box(0.24, 0.24, 0.24, SKIN, 0, 1.34, 0.2),
+		box(0.27, 0.1, 0.27, 0xc8281e, 0, 1.54, 0.2),
+		...[-0.12, 0.12].map((x) =>
+			place(box(0.12, 0.55, 0.14, TROUSERS, 0, -0.55, 0), {
+				rx: -0.5,
+				x,
+				y: 0.85,
+				z: -0.1,
+			}),
+		),
+	]);
+}
+
+/** Medical helicopter, nose +Z, skids on y = 0. The main rotor is `helicopterRotor()` (own pool, spins). */
+export function helicopter(): BufferGeometry {
+	const body = 0xf4f5f6;
+	const red = 0xd62828;
+	return merge([
+		box(1.7, 1.5, 3.4, body, 0, 0.55, -0.2),
+		box(1.5, 0.9, 1.0, body, 0, 0.6, 1.6),
+		box(1.56, 0.8, 0.7, GLASS, 0, 1.0, 1.85),
+		box(1.74, 0.3, 3.2, red, 0, 0.85, -0.3),
+		box(1.74, 0.5, 1.0, GLASS, 0, 1.4, 0.95),
+		...[-1, 1].flatMap((side) => [
+			box(0.04, 0.5, 0.14, red, side * 0.87, 1.3, -0.45),
+			box(0.04, 0.14, 0.5, red, side * 0.87, 1.48, -0.45),
+		]),
+		box(1.2, 0.3, 2.0, body, 0, 2.05, -0.4),
+		cyl(0.12, 0.12, 0.5, 6, DARK, 0, 2.35, -0.4),
+		box(0.45, 0.5, 3.0, body, 0, 1.0, -3.3),
+		box(0.12, 1.3, 0.9, red, 0, 1.1, -4.6),
+		box(1.6, 0.08, 0.5, body, 0, 1.2, -4.3),
+		box(0.06, 1.0, 0.12, DARK, 0.3, 1.0, -4.85),
+		box(0.06, 0.12, 1.0, DARK, 0.3, 1.4, -4.85),
+		...[-0.75, 0.75].flatMap((x) => [
+			box(0.1, 0.1, 3.4, DARK, x, 0, -0.1),
+			box(0.08, 0.55, 0.08, DARK, x, 0.1, 0.8),
+			box(0.08, 0.55, 0.08, DARK, x, 0.1, -0.9),
+		]),
+	]);
+}
+
+/** Two-blade-pair rotor disc centred on the origin (hub at y = 0); spun by its own pool. */
+export function helicopterRotor(): BufferGeometry {
+	return merge([
+		box(8.6, 0.06, 0.4, DARK, 0, 0, 0),
+		box(0.4, 0.06, 8.6, DARK, 0, 0.001, 0),
+		cyl(0.3, 0.3, 0.22, 8, 0x555555, 0, -0.08, 0),
+	]);
 }

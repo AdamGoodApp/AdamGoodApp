@@ -9,7 +9,7 @@ import {
 } from "three";
 
 const OFFSET = new Vector3(400, 400, 400);
-const FIT_BOX = new Box3(new Vector3(-92, 0, -92), new Vector3(92, 56, 92));
+const FIT_BOX = new Box3(new Vector3(-88, 0, -88), new Vector3(88, 62, 88));
 const RIGHT = new Vector3(1, 0, -1).normalize();
 /** Ground direction that moves up the screen; √3 undoes the 35.26° tilt. */
 const UP_ON_GROUND = new Vector3(-1, 0, -1)
@@ -67,7 +67,7 @@ export class IsoCamera {
 		}
 		this.target.copy(saved);
 		this.reposition();
-		const margin = 1.04;
+		const margin = 1.0;
 		if (aspect >= maxX / maxY) {
 			this.fitHalfH = maxY * margin;
 			this.fitHalfW = this.fitHalfH * aspect;

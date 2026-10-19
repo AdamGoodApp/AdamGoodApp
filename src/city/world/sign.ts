@@ -1,5 +1,5 @@
 import { Matrix4 } from "three";
-import { box, cyl } from "../geometry";
+import { box, cyl, GLOW, glow } from "../geometry";
 import { WHITE } from "../palette";
 import type { BuildContext } from "./context";
 
@@ -43,14 +43,17 @@ export function buildSign(ctx: BuildContext): void {
 			for (let c = 0; c < row.length; c++) {
 				if (row.charAt(c) !== "#") continue;
 				parts.push(
-					box(
-						CUBE,
-						CUBE_H,
-						CUBE,
-						WHITE,
-						x0 + c * CUBE,
-						baseY + (rows.length - 1 - r) * CUBE_H,
-						0,
+					glow(
+						box(
+							CUBE,
+							CUBE_H,
+							CUBE,
+							WHITE,
+							x0 + c * CUBE,
+							baseY + (rows.length - 1 - r) * CUBE_H,
+							0,
+						),
+						GLOW.night,
 					),
 				);
 			}

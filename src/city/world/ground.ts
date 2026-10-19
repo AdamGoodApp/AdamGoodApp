@@ -7,7 +7,7 @@ import { CELL_Y, LAND_HALF } from "./layout";
 const CELLS: { x: [number, number]; z: [number, number]; color: number }[] = [
 	{ x: [-84, -33], z: [-84, -33], color: CONCRETE }, // downtown
 	{ x: [-27, 27], z: [-84, -33], color: 0x8fae7a }, // mountains
-	{ x: [33, 84], z: [-84, -33], color: APRON }, // airport
+	{ x: [33, 84], z: [-84, -33], color: APRON }, // arena + hospital
 	{ x: [-84, -33], z: [-27, 27], color: GRASS }, // rural
 	{ x: [-27, 27], z: [-27, 27], color: PARK }, // park
 	{ x: [33, 84], z: [-27, 27], color: PAVEMENT }, // commercial

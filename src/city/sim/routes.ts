@@ -63,6 +63,10 @@ export const CAR_LOOPS: readonly Polyline[] = [
 	LOOP_SE,
 ];
 
+/** Hospital forecourt (NE cell) and the suburbs fire scene; the east side of the ring road passes both. */
+export const HOSPITAL_SPOT = new Vector3(70, ROAD_Y, -40);
+export const FIRE_SPOT = new Vector3(70, ROAD_Y, 70);
+
 export const BUS_RING = RING_CW;
 export const BUS_RING_REVERSE = RING_CCW;
 

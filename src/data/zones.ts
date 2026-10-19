@@ -26,7 +26,7 @@ export interface ZoneDef {
 /**
  * World axes: +X east, +Z south. The camera looks from (+X, +Y, +Z), so the
  * top of the screen is NW (downtown) and the bottom is SE (suburbs). The
- * centre cell (sign park) and the NE cell (airport) are not interactive.
+ * centre cell (sign park) and the NE cell (arena + hospital) are not interactive.
  */
 export const ZONES: readonly ZoneDef[] = [
 	{
@@ -34,7 +34,7 @@ export const ZONES: readonly ZoneDef[] = [
 		district: "Downtown",
 		topic: "Experience",
 		rect: { minX: -84, maxX: -33, minZ: -84, maxZ: -33 },
-		anchor: [-58, 46, -58],
+		anchor: [-58, 58, -58],
 	},
 	{
 		id: "mountains",
@@ -45,7 +45,7 @@ export const ZONES: readonly ZoneDef[] = [
 	},
 	{
 		id: "rural",
-		district: "Farmland",
+		district: "Old Town",
 		topic: "Roots",
 		rect: { minX: -84, maxX: -33, minZ: -27, maxZ: 27 },
 		anchor: [-58, 14, 0],

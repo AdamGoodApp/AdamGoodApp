@@ -12,6 +12,8 @@ import {
 	box,
 	cone,
 	cyl,
+	GLOW,
+	glow,
 	MAT_STATIC,
 	merge,
 	paint,
@@ -19,12 +21,21 @@ import {
 	place,
 	prism,
 } from "../geometry";
-import { PAVEMENT, SHIRTS, WHITE } from "../palette";
-import { pine, roundTree } from "../prefabs";
+import { BRIGHTS, PAVEMENT, SHIRTS, WHITE } from "../palette";
+import { lamp, pine, roundTree } from "../prefabs";
+import { scaled } from "../sim/agent";
+import { type CrowdSpot, createCrowd } from "../sim/crowd";
 import { Polyline } from "../sim/path";
-import { CarouselAgent, CoasterAgent, FerrisAgent } from "../sim/rides";
+import {
+	BumperCarsAgent,
+	CarouselAgent,
+	CoasterAgent,
+	DropTowerAgent,
+	FerrisAgent,
+	SwingAgent,
+} from "../sim/rides";
 import type { BuildContext } from "./context";
-import { signMesh } from "./signs";
+import { type SignSpec, signMesh } from "./signs";
 
 const GATE_Z = 35.5;
 const PATH_Y = 0.16;
@@ -49,6 +60,16 @@ const FERRIS_CENTER = new Vector3(14, 10, 70);
 const FERRIS_YAW = Math.PI / 4;
 const FERRIS_RADIUS = 9;
 const CAROUSEL_CENTER = new Vector3(16, 0, 48);
+
+const DROP_X = 22.5;
+const DROP_Z = 38.5;
+const DROP_HEIGHT = 28;
+const SWING_X = 0.5;
+const SWING_Z = 76.5;
+const SWING_PIVOT_Y = 11.35;
+const BUMPER = { x: 7.8, z: 55.6, halfX: 4, halfZ: 3.1 };
+
+const NEON = [0xff4fa3, 0x4cf0ff, 0xffe14a, 0x7dff6a, 0xff8a3d] as const;
 
 const frame = new Object3D();
 frame.rotation.order = "YXZ";
@@ -98,37 +119,90 @@ function pathBetween(points: [number, number][]): {
 	};
 }
 
-function buildGate(ctx: BuildContext): void {
-	ctx.statics.push(
+function buildGate(ctx: BuildContext, signs: SignSpec[]): void {
+	const parts: BufferGeometry[] = [
 		box(1, 6, 1, 0xe8463c, -4.5, 0, GATE_Z),
 		box(1, 6, 1, 0xe8463c, 4.5, 0, GATE_Z),
 		box(10, 1.2, 1, 0xf2c94c, 0, 6, GATE_Z),
 		box(8.4, 1.8, 0.3, 0x2b2b2b, 0, 7.2, GATE_Z),
-	);
-	ctx.group.add(
-		signMesh([
-			{
-				label: "FUN PARK",
-				width: 8,
-				height: 1.5,
-				position: [0, 8.1, GATE_Z + 0.2],
-				ry: 0,
-			},
-		]),
-	);
+		box(9.2, 0.14, 0.14, 0xff4fa3, 0, 9.1, GATE_Z + 0.15),
+	];
+	for (const x of [-4.5, 4.5]) {
+		parts.push(
+			glow(box(0.2, 5.6, 0.2, 0xffe14a, x, 0.2, GATE_Z + 0.6), GLOW.night),
+		);
+	}
+	for (const [x, color] of [
+		[-4.5, 0xff4fa3],
+		[4.5, 0x4cf0ff],
+	] as const) {
+		parts.push(glow(box(0.6, 0.6, 0.6, color, x, 7, GATE_Z), GLOW.always));
+	}
+	ctx.statics.push(...parts);
+	signs.push({
+		label: "FUN PARK",
+		width: 8,
+		height: 1.5,
+		position: [0, 8.1, GATE_Z + 0.2],
+		ry: 0,
+	});
 }
 
 function buildPaths(ctx: BuildContext): void {
-	const start: [number, number] = [0, 34.2];
 	const routes: [number, number][][] = [
-		[start, [-18, 38]],
-		[start, [11, 47]],
-		[start, [2, 62], [10, 66]],
+		[
+			[0.5, 34.2],
+			[0.5, 72.5],
+		],
+		[
+			[0.5, 38.5],
+			[-18, 38.5],
+		],
+		[
+			[0.5, 41.5],
+			[22.5, 41.5],
+		],
+		[
+			[0.5, 48],
+			[10.5, 48],
+		],
+		[
+			[0.5, 61],
+			[24, 61],
+		],
+		[
+			[0.5, 66],
+			[10.8, 66],
+		],
 	];
 	for (const route of routes) {
 		const { geos, line } = pathBetween(route);
 		ctx.statics.push(...geos);
 		ctx.sidewalks.push(line);
+	}
+	const lamps: [number, number][] = [
+		[2.7, 45],
+		[2.7, 53],
+		[2.7, 63.5],
+		[2.7, 69.5],
+		[-1.9, 60],
+		[-1.9, 46],
+		[12.5, 43.8],
+		[19, 43.8],
+		[12, 63.8],
+		[20, 63.8],
+		[-10, 40.5],
+		[-1.9, 36.5],
+	];
+	for (const [x, z] of lamps) {
+		ctx.statics.push(place(lamp(), { x, y: PATH_Y, z }));
+	}
+	// Flower planters beside the gate.
+	for (const x of [-7, -10.5]) {
+		ctx.statics.push(
+			box(3, 0.5, 1.2, 0x8a5a3c, x, 0.1, 36),
+			box(2.8, 0.15, 1, ctx.rng.pick(BRIGHTS), x, 0.6, 36),
+		);
 	}
 }
 
@@ -173,6 +247,7 @@ function buildCoaster(ctx: BuildContext): void {
 
 	const at = new Vector3();
 	const tn = new Vector3();
+	let support = 0;
 	for (let s = 0; s < track.length; s += 1) {
 		track.pointAt(s, at);
 		track.tangentAt(s, tn);
@@ -183,8 +258,23 @@ function buildCoaster(ctx: BuildContext): void {
 		);
 		if (s % 4 < 1) {
 			const h = at.y - 0.3;
-			if (h > 1.5)
-				ctx.statics.push(cyl(0.15, 0.15, h, 6, 0x777777, at.x, 0.1, at.z));
+			if (h > 1.5) {
+				ctx.statics.push(
+					cyl(0.15, 0.15, h, 6, 0x777777, at.x, 0.1, at.z),
+					glow(
+						box(
+							0.1,
+							h - 0.2,
+							0.1,
+							NEON[support++ % NEON.length] as number,
+							at.x + 0.22,
+							0.1,
+							at.z,
+						),
+						GLOW.night,
+					),
+				);
+			}
 		}
 	}
 
@@ -246,6 +336,23 @@ function buildFerris(ctx: BuildContext): void {
 			}),
 		);
 	}
+	for (let i = 0; i < 24; i++) {
+		const a = (i * Math.PI) / 12;
+		wheelParts.push(
+			glow(
+				box(
+					0.3,
+					0.3,
+					0.8,
+					i % 2 === 0 ? 0xfff1c4 : (NEON[i % NEON.length] as number),
+					Math.cos(a) * FERRIS_RADIUS,
+					Math.sin(a) * FERRIS_RADIUS - 0.15,
+					0,
+				),
+				GLOW.night,
+			),
+		);
+	}
 	const wheel = new Mesh(merge(wheelParts), MAT_STATIC);
 	wheel.position.y = FERRIS_CENTER.y;
 	wheel.castShadow = true;
@@ -275,26 +382,84 @@ function buildCarousel(ctx: BuildContext): void {
 		place(cyl(0.25, 0.25, 4.5, 8, 0xe8eaee), { x, y: 0.7, z }),
 		place(roof, { x, z }),
 	);
+	for (let i = 0; i < 16; i++) {
+		const a = (i * Math.PI) / 8;
+		ctx.statics.push(
+			glow(
+				box(
+					0.25,
+					0.25,
+					0.25,
+					i % 2 === 0 ? 0xfff1c4 : (NEON[i % NEON.length] as number),
+					x + Math.cos(a) * 5.3,
+					4.4,
+					z + Math.sin(a) * 5.3,
+				),
+				GLOW.night,
+			),
+			glow(
+				box(
+					0.3,
+					0.12,
+					0.3,
+					0xfff1c4,
+					x + Math.cos(a) * 4.9,
+					0.7,
+					z + Math.sin(a) * 4.9,
+				),
+				GLOW.night,
+			),
+		);
+	}
 	const agent = new CarouselAgent(CAROUSEL_CENTER, 3.8);
 	ctx.group.add(agent.pool.mesh);
 	ctx.agents.push(agent);
 }
 
-function buildStalls(ctx: BuildContext): void {
-	const spots: [number, number][] = [
-		[6, 44],
-		[-2, 50],
-		[8, 58],
-	];
-	for (const [x, z] of spots) {
+interface Stall {
+	x: number;
+	z: number;
+	label: string;
+}
+
+const STALLS: readonly Stall[] = [
+	{ x: 7.5, z: 37.2, label: "BURGERS" },
+	{ x: 11.5, z: 37.2, label: "PIZZA" },
+	{ x: 15.5, z: 37.2, label: "TACOS" },
+	{ x: 15, z: 56.8, label: "DONUTS" },
+	{ x: 19, z: 56.8, label: "ICE CREAM" },
+	{ x: 23, z: 56.8, label: "DRINKS" },
+];
+
+function buildStalls(ctx: BuildContext, signs: SignSpec[]): void {
+	for (const [i, { x, z, label }] of STALLS.entries()) {
+		const neon = NEON[i % NEON.length] as number;
 		const awning = paintBy(prism(3.4, 0.8, 3, 0xe8463c), (px) =>
 			Math.floor((px + 10) / 0.5) % 2 === 0 ? 0xe8463c : WHITE,
 		);
-		ctx.statics.push(
-			box(3, 2.5, 2.5, WHITE, x, 0.1, z),
-			place(awning, { x, y: 2.6, z }),
-			box(3.2, 0.2, 1, 0xf2c94c, x, 1.1, z + 1.5),
-		);
+		const parts: BufferGeometry[] = [
+			box(3, 2.5, 2.5, WHITE, 0, 0.1, 0),
+			place(awning, { y: 2.6 }),
+			box(3.2, 0.2, 1, 0xf2c94c, 0, 1.1, 1.5),
+			box(2.6, 0.7, 0.12, 0x111111, 0, 3.25, 1.35),
+			glow(box(2.8, 0.1, 0.1, neon, 0, 4, 1.4), GLOW.always),
+			glow(box(2.8, 0.1, 0.1, neon, 0, 3.15, 1.4), GLOW.always),
+			glow(box(0.1, 0.9, 0.1, neon, -1.4, 3.15, 1.4), GLOW.always),
+			glow(box(0.1, 0.9, 0.1, neon, 1.4, 3.15, 1.4), GLOW.always),
+		];
+		for (const lx of [-1.2, -0.4, 0.4, 1.2]) {
+			parts.push(
+				glow(box(0.12, 0.12, 0.12, 0xfff1c4, lx, 2.45, 1.55), GLOW.night),
+			);
+		}
+		ctx.statics.push(place(merge(parts), { x, z }));
+		signs.push({
+			label,
+			width: 2.4,
+			height: 0.55,
+			position: [x, 3.6, z + 1.42],
+			ry: 0,
+		});
 	}
 }
 
@@ -332,16 +497,209 @@ function buildQueues(ctx: BuildContext): void {
 	}
 }
 
+/** Square lattice mast with braced faces and glowing corner strips. */
+function buildDropTower(ctx: BuildContext): void {
+	const half = 1.15;
+	const step = 3.5;
+	const ang = Math.atan2(2 * half, step);
+	const len = Math.hypot(2 * half, step);
+	const steel = 0xd9dde2;
+	const parts: BufferGeometry[] = [
+		box(5.4, 0.3, 5.4, 0x6d7077, 0, 0.1, 0),
+		box(3.8, 1.1, 3.8, 0xe8463c, 0, DROP_HEIGHT - 0.4, 0),
+		prism(3.8, 1.2, 3.8, 0xf2c94c, 0, DROP_HEIGHT + 0.7, 0),
+		glow(box(0.4, 0.4, 0.4, 0xff2b2b, 0, DROP_HEIGHT + 1.9, 0), GLOW.always),
+	];
+	for (const sx of [-1, 1]) {
+		for (const sz of [-1, 1]) {
+			parts.push(
+				box(0.2, DROP_HEIGHT - 0.3, 0.2, steel, sx * half, 0.4, sz * half),
+				glow(
+					box(
+						0.14,
+						DROP_HEIGHT - 0.8,
+						0.14,
+						NEON[(sx + 1 + sz + 1) % NEON.length] as number,
+						sx * (half + 0.12),
+						0.6,
+						sz * (half + 0.12),
+					),
+					GLOW.night,
+				),
+			);
+		}
+	}
+	let dir = 1;
+	for (let y = 0.4; y + step < DROP_HEIGHT - 0.3; y += step) {
+		for (const s of [-1, 1]) {
+			parts.push(
+				box(2 * half, 0.1, 0.1, steel, 0, y, s * half),
+				box(0.1, 0.1, 2 * half, steel, s * half, y, 0),
+				place(box(0.09, len, 0.09, steel), {
+					rz: -dir * ang,
+					x: -half * dir,
+					y,
+					z: s * half,
+				}),
+				place(box(0.09, len, 0.09, steel), {
+					rx: dir * ang,
+					y,
+					x: s * half,
+					z: -half * dir,
+				}),
+			);
+		}
+		dir = -dir;
+	}
+	ctx.statics.push(place(merge(parts), { x: DROP_X, z: DROP_Z }));
+	const agent = new DropTowerAgent(
+		DROP_X,
+		DROP_Z,
+		0.1 + 1.9,
+		0.1 + DROP_HEIGHT - 2.4,
+	);
+	ctx.group.add(agent.pool.mesh);
+	ctx.agents.push(agent);
+}
+
+function buildSwing(ctx: BuildContext): void {
+	const canopy = paintBy(cone(3.9, 1.7, 16, WHITE, 0, 11.65), (px, _y, pz) =>
+		Math.floor(((Math.atan2(pz, px) + Math.PI) / (Math.PI * 2)) * 16) % 2 === 0
+			? 0x3b7dd8
+			: WHITE,
+	);
+	const parts: BufferGeometry[] = [
+		cyl(2.6, 2.8, 0.5, 16, 0x777777, 0, 0.1, 0),
+		cyl(0.5, 0.7, 11, 10, 0xe8eaee, 0, 0.6, 0),
+		cyl(3.5, 3.5, 0.35, 16, 0xf2c94c, 0, 11.3, 0),
+		canopy,
+		glow(box(0.4, 0.4, 0.4, 0xff4fa3, 0, 13.4, 0), GLOW.always),
+	];
+	for (let i = 0; i < 16; i++) {
+		const a = (i * Math.PI) / 8;
+		parts.push(
+			glow(
+				box(
+					0.25,
+					0.25,
+					0.25,
+					i % 2 === 0 ? 0xfff1c4 : (NEON[i % NEON.length] as number),
+					Math.cos(a) * 3.55,
+					11.05,
+					Math.sin(a) * 3.55,
+				),
+				GLOW.night,
+			),
+		);
+	}
+	ctx.statics.push(place(merge(parts), { x: SWING_X, z: SWING_Z }));
+	const agent = new SwingAgent(SWING_X, SWING_Z, SWING_PIVOT_Y, 3.2);
+	ctx.group.add(agent.pool.mesh);
+	ctx.agents.push(agent);
+}
+
+function buildBumperCars(ctx: BuildContext, signs: SignSpec[]): void {
+	const { x, z, halfX, halfZ } = BUMPER;
+	const wall = 0.5;
+	const parts: BufferGeometry[] = [
+		box(2 * halfX, 0.05, 2 * halfZ, 0x3a3f5c, x, 0.1, z),
+		box(2 * halfX + 0.4, wall, 0.2, 0xe8463c, x, 0.1, z - halfZ - 0.1),
+		box(2 * halfX + 0.4, wall, 0.2, 0xe8463c, x, 0.1, z + halfZ + 0.1),
+		box(0.2, wall, 2 * halfZ, 0xe8463c, x - halfX - 0.1, 0.1, z),
+		box(0.2, wall, 2 * halfZ, 0xe8463c, x + halfX + 0.1, 0.1, z),
+		box(0.1, 2.9, 0.1, 0x777777, x - 2.2, 0.1, z - halfZ),
+		box(0.1, 2.9, 0.1, 0x777777, x + 2.2, 0.1, z - halfZ),
+		box(5, 0.9, 0.1, 0x111111, x, 2.2, z - halfZ - 0.02),
+	];
+	const corners: [number, number][] = [
+		[x - halfX, z - halfZ],
+		[x + halfX, z - halfZ],
+		[x - halfX, z + halfZ],
+		[x + halfX, z + halfZ],
+	];
+	for (const [i, [cx, cz]] of corners.entries()) {
+		parts.push(
+			box(0.15, 2.3, 0.15, 0x777777, cx, 0.1, cz),
+			glow(
+				box(
+					0.3,
+					0.3,
+					0.3,
+					NEON[i % NEON.length] as number,
+					cx - 0.15,
+					2.4,
+					cz - 0.15,
+				),
+				GLOW.night,
+			),
+		);
+	}
+	for (let i = 0; i < 8; i++) {
+		parts.push(
+			glow(
+				box(0.14, 0.14, 0.14, 0xfff1c4, x - 3.5 + i, 0.62, z + halfZ + 0.1),
+				GLOW.night,
+			),
+		);
+	}
+	ctx.statics.push(...parts);
+	signs.push({
+		label: "BUMPER CARS",
+		width: 4.6,
+		height: 0.7,
+		position: [x, 2.65, z - halfZ + 0.06],
+		ry: 0,
+	});
+	const agent = new BumperCarsAgent(
+		ctx.rng,
+		scaled(6, ctx.density),
+		x,
+		z,
+		halfX - 0.8,
+		halfZ - 0.7,
+		0.15,
+	);
+	ctx.group.add(agent.pool.mesh);
+	ctx.agents.push(agent);
+}
+
+function buildCrowd(ctx: BuildContext): void {
+	const y = PATH_Y;
+	const spots: CrowdSpot[] = [];
+	const row = (x0: number, z0: number, x1: number, z1: number, n: number) => {
+		for (let i = 0; i < n; i++) {
+			const t = n === 1 ? 0 : i / (n - 1);
+			spots.push({ x: x0 + (x1 - x0) * t, z: z0 + (z1 - z0) * t, y });
+		}
+	};
+	row(-16, 38.5, -6, 38.5, 9);
+	row(3.5, 66, 6.5, 66, 4);
+	row(16.5, 41.8, 21, 41.8, 5);
+	row(-0.5, 69.5, 1.5, 71, 3);
+	row(5, 60.4, 11, 60.4, 4);
+	row(8, 47, 9.5, 49.3, 3);
+	for (const s of STALLS) {
+		spots.push(
+			{ x: s.x - 0.8, z: s.z + 3.4, y },
+			{ x: s.x + 0.9, z: s.z + 3.3, y },
+		);
+	}
+	row(0, 36.5, 1, 69, 11);
+	row(-3, 40.5, 4, 43.5, 4);
+	createCrowd(ctx, spots, { count: 84, spread: 0.55 });
+}
+
 function buildTrees(ctx: BuildContext): void {
 	const spots: [number, number][] = [
-		[25.5, 40],
-		[25.5, 52],
-		[25.5, 64],
-		[25.5, 76],
-		[-10, 82.5],
-		[0, 82.5],
-		[10, 82.5],
-		[20, 82.5],
+		[25, 46],
+		[25, 52],
+		[25, 64],
+		[25, 72],
+		[25, 78],
+		[5.5, 82.5],
+		[11, 82.5],
+		[16.5, 82.5],
+		[22, 82.5],
 	];
 	for (const [i, [x, z]] of spots.entries()) {
 		const s = ctx.rng.range(0.9, 1.2);
@@ -352,12 +710,18 @@ function buildTrees(ctx: BuildContext): void {
 }
 
 export function buildThemePark(ctx: BuildContext): void {
-	buildGate(ctx);
+	const signs: SignSpec[] = [];
+	buildGate(ctx, signs);
 	buildPaths(ctx);
 	buildCoaster(ctx);
 	buildFerris(ctx);
 	buildCarousel(ctx);
-	buildStalls(ctx);
+	buildStalls(ctx, signs);
+	buildDropTower(ctx);
+	buildSwing(ctx);
+	buildBumperCars(ctx, signs);
 	buildQueues(ctx);
+	buildCrowd(ctx);
 	buildTrees(ctx);
+	ctx.group.add(signMesh(signs));
 }

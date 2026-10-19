@@ -18,8 +18,8 @@ import {
 	Vector3,
 } from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { attribute, fract, positionLocal, step, vertexColor } from "three/tsl";
-import { MeshBasicNodeMaterial, MeshLambertNodeMaterial } from "three/webgpu";
+import { attribute, fract, step, vertexColor } from "three/tsl";
+import { MeshLambertNodeMaterial } from "three/webgpu";
 import { night, simClock } from "./env";
 
 const tmpColor = new Color();
@@ -39,8 +39,8 @@ function normalise(geo: BufferGeometry): BufferGeometry {
 
 /**
  * Per-vertex emission class carried by every painted geometry (`glow` attribute):
- * `night` lights up after dusk (lamps, headlights), `siren` flashes red/blue by
- * side all day, `always` glows a little by day and fully at night (screens, neon).
+ * `night` lights up after dusk (lamps, headlights), `siren` flashes red and blue
+ * lamps alternately all day, `always` glows a little by day and fully at night (screens, neon).
  */
 export const GLOW = { none: 0, night: 1, siren: 2, always: 3 } as const;
 export type Glow = (typeof GLOW)[keyof typeof GLOW];
@@ -225,8 +225,10 @@ export function glow(geo: BufferGeometry, kind: Glow): BufferGeometry {
 function glowEmissive() {
 	const g = attribute("glow", "float");
 	const steady = step(0.5, g).mul(step(g, 1.5)).mul(night).mul(1.8);
-	// Left and right halves of a light bar alternate twice a second.
-	const phase = fract(simClock.mul(2.2).add(step(0, positionLocal.x).mul(0.5)));
+	// Red and blue lamps alternate twice a second (keyed by colour, so it also
+	// works for light bars baked into the static mesh in world space).
+	const c = vertexColor();
+	const phase = fract(simClock.mul(2.2).add(step(c.b, c.r).mul(0.5)));
 	const siren = step(1.5, g).mul(step(g, 2.5)).mul(step(0.5, phase)).mul(3);
 	const always = step(2.5, g).mul(night.mul(1.4).add(0.5));
 	return vertexColor().mul(steady.add(siren).add(always));
@@ -247,7 +249,6 @@ export const MAT_STATIC = litMaterial();
 /** Instance colour multiplies vertex colour: paint tintable parts WHITE. */
 export const MAT_INSTANCED = litMaterial();
 export const MAT_BOAT = litMaterial(DoubleSide);
-export const MAT_WINDOW = new MeshBasicNodeMaterial({ color: 0xffffff });
 
 export function instanced(
 	geo: BufferGeometry,

@@ -5,6 +5,8 @@ import {
 	BUS_STOPS_CCW,
 	BUS_STOPS_CW,
 	CAR_LOOPS,
+	FIRE_SPOT,
+	HOSPITAL_SPOT,
 	INNER_CCW,
 	INNER_CW,
 	nearestOnLine,
@@ -84,6 +86,14 @@ describe("vehicle routes", () => {
 			TRAM.pointAt(s, p);
 			expect(Math.min(Math.abs(p.x), Math.abs(p.z))).toBeLessThan(1e-6);
 			expect(Math.max(Math.abs(p.x), Math.abs(p.z))).toBeCloseTo(TRAM_HALF, 6);
+		}
+	});
+
+	it("lets emergency vehicles on the ring pass the hospital and the fire scene", () => {
+		for (const line of [RING_CW, RING_CCW]) {
+			for (const spot of [HOSPITAL_SPOT, FIRE_SPOT]) {
+				expect(nearestOnLine(line, spot).dist).toBeLessThan(20);
+			}
 		}
 	});
 });

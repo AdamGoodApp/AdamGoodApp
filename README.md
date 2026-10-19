@@ -13,7 +13,7 @@ Senior Full-Stack Engineer in Tokyo — TypeScript, React/TanStack, three.js, AI
 
 ## What it is
 
-My CV as a living, low-poly isometric city. Every district is a chapter of my career: hover one to outline it, click it to read that section. Cars, buses and a tram run the roads, residents walk out of their houses, planes take off, boats sail past the lighthouse, and an "AdamGoodApp" sign sits on the hill in the middle. LinkedIn, GitHub and email are in the bottom-right corner.
+My CV as a living, SimCity-style isometric city. Every district is a chapter of my career: hover one to outline it, click it to read that section. Traffic, buses, a tram and police patrols fill the roads, fire crews fight a house fire in the suburbs, ambulances run to the hospital, a rally gathers outside the town hall, the arena lights up its searchlights at night, boats sail past the lighthouse, and an "AdamGoodApp" sign glows on the hill in the middle. The city runs a day/night cycle; the button in the top-right corner switches between auto, day and night. LinkedIn, GitHub and email are in the bottom-right corner.
 
 ## Districts → CV
 
@@ -21,7 +21,7 @@ My CV as a living, low-poly isometric city. Every district is a chapter of my ca
 | --- | --- |
 | Downtown | Experience: Tofu, U-NEXT, Synspective |
 | The Peaks | FATMAP (3D mapping, Berlin) |
-| Farmland | Roots: Automata Technologies, education |
+| Old Town & Campus | Roots: Automata Technologies, education |
 | Shop Street | Technical skills |
 | The Beach | About me, languages, contact |
 | Fun Park | Open-source projects |
@@ -29,11 +29,13 @@ My CV as a living, low-poly isometric city. Every district is a chapter of my ca
 
 ## How the city is built
 
-- **Procedural everything.** No models or textures are downloaded: every building, tree, vehicle and animal is a prefab built from boxes, cylinders and cones (`src/city/prefabs.ts`) and painted with vertex colours.
-- **One static mesh.** All scenery is merged into a single geometry with one material, so the whole island is one draw call.
-- **Instanced agents.** Each kind of moving thing (cars, people, gulls, gondolas, …) is one `InstancedMesh`; the whole frame stays within a ~45 draw-call budget.
-- **Fixed-step simulation.** Agents update at 60 Hz independent of the display rate (`src/city/world.ts`).
-- **WebGPU first.** three.js `WebGPURenderer` runs on WebGPU and falls back to its WebGL2 backend; the ocean is a TSL node material. Without either, a static snapshot with the same links and an accessible text CV is shown.
+- **Procedural everything.** No models or textures are downloaded. Buildings come from a parametric kit (`src/city/kit/buildings.ts`: walk-ups, offices, art-deco and glass towers, apartments, houses) whose walls use a facade atlas drawn on a canvas at load time (`src/city/kit/atlas.ts`: brick, stone, glass curtain walls, storefronts, siding). Props, vehicles and people are prefabs built from boxes, cylinders and cones and painted with vertex colours.
+- **Two static meshes.** All vertex-coloured scenery is merged into one mesh and all textured walls into another, so the island's scenery is two draw calls.
+- **Facade shader.** One TSL material tiles the atlas per bay and floor, mirrors the sky in the glass by day and switches windows on and off at night, each window on its own timer.
+- **Day/night.** Sun, moon, sky gradient, street lamps, headlights, neon, LED screens and bloom follow a three-minute cycle (`src/city/env.ts`); a per-vertex `glow` attribute marks what lights up, and siren light bars flash red/blue.
+- **Instanced agents.** Each kind of moving thing (cars, police cars, ambulances, people, flames, smoke, water jets, gulls, gondolas, …) is one `InstancedMesh`.
+- **Fixed-step simulation.** Agents update at 60 Hz independent of the display rate (`src/city/world.ts`); cars reserve junctions so 100+ vehicles never overlap.
+- **WebGPU first.** three.js `WebGPURenderer` runs on WebGPU and falls back to its WebGL2 backend, with a post-processing pipeline for bloom and a tilt-shift blur. Without either backend, a static snapshot with the same links and an accessible text CV is shown.
 - **Respectful.** `prefers-reduced-motion` freezes the simulation, hidden tabs pause it, and the full CV is server-rendered for screen readers and crawlers. Keyboard users get a district menu on the first <kbd>Tab</kbd>.
 
 ## Stack
@@ -45,7 +47,7 @@ TanStack Start (React 19, file-based routing, SSR) on Cloudflare Workers · thre
 ```sh
 corepack enable pnpm
 pnpm i
-pnpm dev            # http://localhost:3000 (?tier=webgl2 or ?tier=fallback to force a tier)
+pnpm dev            # http://localhost:3000 (?tier=webgl2|fallback forces a renderer, ?time=day|night pins the clock)
 pnpm test           # unit + component tests
 pnpm build && pnpm e2e
 pnpm preview & pnpm capture   # re-render public/city.jpg and public/og.jpg

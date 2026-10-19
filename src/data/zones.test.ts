@@ -8,7 +8,7 @@ describe("zoneAt", () => {
 		expect(zoneAt(-58, 58)).toBe("beach");
 	});
 
-	it("treats the park, the airport and the avenues as non-interactive", () => {
+	it("treats the park, the arena and the avenues as non-interactive", () => {
 		expect(zoneAt(0, 0)).toBeNull();
 		expect(zoneAt(58, -58)).toBeNull();
 		expect(zoneAt(-30, 0)).toBeNull();

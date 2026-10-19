@@ -29,7 +29,7 @@ try {
 		const page = await browser.newPage({
 			viewport: { width: shot.width, height: shot.height },
 		});
-		await page.goto(`${BASE}/?capture=1&tier=webgl2`);
+		await page.goto(`${BASE}/?capture=1&tier=webgl2&time=day`);
 		await page
 			.locator('canvas[data-ready="1"]')
 			.waitFor({ state: "attached", timeout: 120_000 });
