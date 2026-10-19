@@ -8,7 +8,7 @@ export function StaticFallback() {
 			className="fixed inset-0 bg-cover bg-center"
 			style={{ backgroundImage: "url(/city.jpg)" }}
 		>
-			<div className="absolute inset-0 bg-black/30" />
+			<div className="absolute inset-0 bg-black/55" />
 			<div className="absolute inset-0 flex items-center justify-center p-6">
 				<div
 					data-testid="fallback-center"
