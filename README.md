@@ -41,9 +41,7 @@ My CV as a living, SimCity-style isometric city that fills the whole screen: sev
 
 ## AI agents (MCP)
 
-[![Claude answering "show me the relevant work history where Rust is used" through the AdamGoodApp MCP, with the 8-bit CV card rendered inline](public/mcp-demo.jpg)](https://adamgoodapp.com/mcp-demo.mp4)
-
-*26 s demo, recorded in claude.ai: Claude calls the AdamGoodApp connector, renders the CV card inline and answers from the real CV. [Watch the MP4](https://adamgoodapp.com/mcp-demo.mp4).*
+[![Claude answering "show me the relevant work history where Rust is used" through the AdamGoodApp MCP, with the 8-bit CV card rendered inline](public/mcp-demo.mp4)](https://adamgoodapp.com/mcp-demo.mp4)
 
 ### Try it in Claude
 
