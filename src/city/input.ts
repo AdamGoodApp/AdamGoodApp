@@ -63,8 +63,12 @@ export class PointerController {
 
 	/** Mouse wheel and trackpad scroll/pinch zoom toward the pointer. */
 	private onWheel = (e: WheelEvent) => {
-		// Cards and drawers scroll their own content.
-		if (e.target instanceof Element && e.target.closest('[role="dialog"]'))
+		// Cards, drawers and the chat scroll their own content; pinches (ctrl+wheel) still zoom the city.
+		if (
+			!e.ctrlKey &&
+			e.target instanceof Element &&
+			e.target.closest('[role="dialog"], [data-own-scroll]')
+		)
 			return;
 		e.preventDefault();
 		const px = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;

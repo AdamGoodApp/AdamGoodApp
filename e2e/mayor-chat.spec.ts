@@ -63,8 +63,9 @@ test("the Mayor answers, drives the city and keeps the conversation", async ({
 
 	await expect(dock).toHaveAttribute("data-state", "expanded");
 	await expect(messages).toContainText("I've flown you there");
-	await expect(messages).toContainText("Mayor");
-	await expect(messages).toContainText("Focus a district · The Beach");
+	const thoughts = page.getByTestId("mayor-thoughts");
+	await thoughts.getByRole("button", { name: "Took 1 step" }).click();
+	await expect(thoughts).toContainText("Focus a district · The Beach");
 	await expect
 		.poll(() => distanceToBeach(page), { timeout: 5_000 })
 		.toBeLessThan(2);
@@ -97,6 +98,10 @@ test("suggestions read the city news and job descriptions get a fit check", asyn
 	);
 	const messages = page.getByTestId("mayor-messages");
 	await expect(messages).toContainText("nothing on fire yet");
+	await page
+		.getByTestId("mayor-thoughts")
+		.getByRole("button", { name: "Took 1 step" })
+		.click();
 	await expect(messages).toContainText("City news feed");
 	expect(bodies[0]).toContain("What's happening in the city right now?");
 
@@ -110,7 +115,85 @@ test("suggestions read the city news and job descriptions get a fit check", asyn
 	await page.getByTestId("mayor-input").press("Enter");
 
 	await expect(messages).toContainText("Fit: 8/10");
+	// Output only: the panel shows the latest request and its answer, not earlier turns.
+	await expect(messages).not.toContainText("nothing on fire yet");
+	await expect(messages).toContainText("Does Adam fit?");
 	const last = bodies.at(-1) ?? "";
 	expect(last).toContain('<job_description filename=\\"jd.txt\\">');
 	expect(last).toContain("Senior Rust engineer wanted");
+});
+
+test("the tour question streams 8-bit choices and a click resumes the tour", async ({
+	page,
+}) => {
+	test.setTimeout(240_000);
+	const bodies = await mockChat(page, [
+		{
+			toolCalls: [{ name: "ask_tour_audience", input: {} }],
+		},
+		{
+			toolCalls: [
+				{
+					name: "run_tour",
+					input: { stops: [{ district: "beach", seconds: 1 }] },
+				},
+			],
+		},
+		{ text: "That was the recruiter tour." },
+	]);
+	await openCity(page);
+
+	await page.getByRole("button", { name: "Give me a 60-second tour" }).click();
+	const choices = page.getByTestId("tour-choice");
+	await expect(choices).toHaveCount(4);
+	await expect(page.getByTestId("tour-choices")).toContainText(
+		"Who is the tour for?",
+	);
+	await expect(choices.nth(1)).toContainText(
+		"5 stops · The Beach → Downtown → Shop Street → Old Town → Suburbs",
+	);
+	// The run pauses on the question: no follow-up request until the visitor answers.
+	expect(bodies).toHaveLength(1);
+
+	await page.getByRole("button", { name: "Recruiter" }).click();
+	const messages = page.getByTestId("mayor-messages");
+	await expect(messages).toContainText("That was the recruiter tour.", {
+		timeout: 30_000,
+	});
+	expect(bodies[1]).toContain('\\"audience\\":\\"recruiter\\"');
+	await expect(page.getByRole("button", { name: "Recruiter" })).toHaveAttribute(
+		"aria-pressed",
+		"true",
+	);
+	await expect(page.getByRole("button", { name: "Engineer" })).toBeDisabled();
+});
+
+test("a job description picked while the tour question is open is kept for the next send", async ({
+	page,
+}) => {
+	const bodies = await mockChat(page, [
+		{ toolCalls: [{ name: "ask_tour_audience", input: {} }] },
+		{ text: "Let's skip the tour then." },
+	]);
+	await openCity(page);
+
+	await page.getByRole("button", { name: "Give me a 60-second tour" }).click();
+	await expect(page.getByTestId("tour-choice")).toHaveCount(4);
+	await page.getByRole("button", { name: "Minimise chat" }).click();
+
+	const chooser = page.waitForEvent("filechooser");
+	await page.getByRole("button", { name: "Check a job description" }).click();
+	await (await chooser).setFiles({
+		name: "jd.txt",
+		mimeType: "text/plain",
+		buffer: Buffer.from("Senior Rust engineer wanted"),
+	});
+
+	// The pill's prompt answers the open question; the file waits in the composer.
+	await expect(page.getByTestId("mayor-messages")).toContainText(
+		"Let's skip the tour then.",
+	);
+	expect(bodies[1]).toContain('\\"reply\\":');
+	expect(bodies[1]).not.toContain("Senior Rust engineer wanted");
+	await expect(page.getByTestId("mayor-attachment")).toContainText("jd.txt");
 });

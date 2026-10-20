@@ -1,6 +1,7 @@
 @import "@fontsource/press-start-2p";
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "shadcn/tailwind.css";
 @import "./theme.css";
 @source "../node_modules/liquid-glass-react/dist/index.esm.js";
 
@@ -12,15 +13,6 @@
 }
 @utility scrollbar-gutter-stable {
   scrollbar-gutter: stable;
-}
-@utility no-scrollbar {
-  scrollbar-width: none;
-  &::-webkit-scrollbar {
-    display: none;
-  }
-}
-@utility scroll-fade-b {
-  mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 2.5rem), transparent 100%);
 }
 
 html,

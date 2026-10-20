@@ -67,12 +67,12 @@ curl -s https://adamgoodapp.com/mcp -H 'Content-Type: application/json' \
 A chat bar at the bottom of the city. Ask "the Mayor" about the CV and the city answers on screen:
 
 - **Answers and moves the camera.** Claude Haiku 5.5 gets the whole CV in its system prompt (`src/chat/system-prompt.ts`). The CV data tools run on the server, and calls to the city tools stream to the browser, which runs them against the live city (focus or open a district, highlight a spot, stage an event).
-- **Guided tours.** The Mayor asks once whether you are an engineer, a recruiter or a founder, then runs a `run_tour` written for that audience. The chat minimises while the camera flies around.
+- **Guided tours.** The Mayor calls `ask_tour_audience`, which pauses the run and shows clickable 8-bit buttons (engineer, recruiter, founder, no preference). The rows are React Server Components streamed one by one from a TanStack Start server function (`src/chat/tour-choices.functions.tsx`). A click, or a typed reply, becomes the tool result, and the Mayor then runs a `run_tour` written for that audience (routes in `src/data/tours.ts`). The chat minimises while the camera flies around.
 - **City news.** "What's happening in the city?" narrates `get_city_events` like a news ticker.
 - **Job-description fit check.** Attach a PDF, TXT or MD job description with `+` (or paste the text). You get a fit score, strong matches with CV evidence, gaps and a next step.
-- **UI.** shadcn AI Elements (`message-scroller`, `message`, `bubble`, `input-group`) inside `liquid-glass-react`, with a rainbow border while the chat has focus and suggestion pills. The conversation is kept in `sessionStorage`; **New chat** clears it.
+- **UI.** shadcn AI Elements (`message-scroller`, `message`, `input-group`, Chain of Thought on `trace`, Suggestion) with the `shadcn/tailwind.css` utilities (`scroll-fade-x`, `shimmer`). The input bar sits bottom centre in `liquid-glass-react`, with a rainbow border while the chat has focus and a sliding row of glass suggestion pills. The Mayor's output opens in a 280px panel on the middle left (just above the input bar on phones), so it doesn't cover the city. The panel is not a back-and-forth chat: it shows the latest request as a label, a chain of thought ("Took 2 steps", open while the Mayor works) and the answer, and the Mayor answers without follow-up questions (earlier turns stay in the model's context). The wheel scrolls the panel while the pointer is over it, and zooms the city everywhere else (elements marked `data-own-scroll` opt out of city zoom; pinches always zoom the city). The conversation is kept in `sessionStorage`; **New chat** clears it.
 
-`POST /api/chat` (`src/chat/server.ts`) streams TanStack AI (AG-UI) server-sent events. It only accepts same-origin requests, caps bodies at 6 MB, keeps the last 40 messages and is rate-limited to 20 requests a minute per IP (Workers rate-limit binding `CHAT_RATE_LIMITER`). Model calls go through the Cloudflare AI Gateway `main` (`src/chat/adapter.ts`), so they show up in the gateway's logs and analytics. The Anthropic key is stored in the gateway (BYOK), and the Worker only holds a gateway token:
+`POST /api/chat` (`src/chat/server.ts`) streams TanStack AI (AG-UI) server-sent events, with a low-effort thinking summary that shows up as a "Reasoning" step in the chain of thought. It only accepts same-origin requests, caps bodies at 6 MB, keeps the last 40 messages and is rate-limited to 20 requests a minute per IP (Workers rate-limit binding `CHAT_RATE_LIMITER`). Model calls go through the Cloudflare AI Gateway `main` (`src/chat/adapter.ts`), so they show up in the gateway's logs and analytics. The Anthropic key is stored in the gateway (BYOK), and the Worker only holds a gateway token:
 
 ```sh
 # AI Gateway → main → Settings → Create authentication token (Run permission)
@@ -84,7 +84,7 @@ Without the token, the chat replies that the Mayor is off duty (HTTP 503).
 
 ## Stack
 
-TanStack Start (React 19, file-based routing, SSR) on Cloudflare Workers · three.js r186 (`three/webgpu`, TSL) · TanStack Store · TanStack AI (chat, tool definitions, Anthropic adapter) via Cloudflare AI Gateway + MCP TypeScript SDK v2 + MCP Apps + MCP-B (WebMCP) · Tailwind CSS v4 · shadcn/ui + AI Elements + 8bitcn/ui · liquid-glass-react · Biome · Vitest · Playwright + axe · lefthook · GitHub Actions.
+TanStack Start (React 19, file-based routing, SSR, experimental React Server Components via `@vitejs/plugin-rsc`) on Cloudflare Workers · three.js r186 (`three/webgpu`, TSL) · TanStack Store · TanStack AI (chat, tool definitions, Anthropic adapter) via Cloudflare AI Gateway + MCP TypeScript SDK v2 + MCP Apps + MCP-B (WebMCP) · Tailwind CSS v4 · shadcn/ui + AI Elements + 8bitcn/ui · liquid-glass-react · Biome · Vitest · Playwright + axe · lefthook · GitHub Actions.
 
 ## Getting started
 

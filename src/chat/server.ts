@@ -19,6 +19,7 @@ import {
 	searchCv,
 } from "#/mcp/definitions";
 import { MAYOR_SYSTEM_PROMPT } from "./system-prompt";
+import { askTourAudience } from "./tour";
 
 export interface RateLimiter {
 	limit(options: { key: string }): Promise<{ success: boolean }>;
@@ -55,8 +56,9 @@ export const CHAT_ERRORS = {
 } as const;
 
 /**
- * The CV data tools run here; the city tools are bare definitions, so their
- * calls stream to the browser, which runs them against the live city.
+ * The CV data tools run here; the city tools and ask_tour_audience are bare
+ * definitions, so their calls stream to the browser, which runs them against
+ * the live city or asks the visitor.
  * Tool declarations sent by the client are ignored: this list is the allowlist.
  */
 const TOOLS = [
@@ -70,6 +72,7 @@ const TOOLS = [
 	getContact.server(DATA_TOOL_BODIES.get_contact),
 	getSiteGuide.server(DATA_TOOL_BODIES.get_site_guide),
 	...CITY_TOOLS,
+	askTourAudience,
 ];
 
 function json(status: number, error: string): Response {
@@ -116,6 +119,8 @@ export function createChatHandler(options: ChatHandlerOptions) {
 			systemPrompts: [MAYOR_SYSTEM_PROMPT],
 			tools: TOOLS,
 			agentLoopStrategy: maxIterations(8),
+			// Stream a thinking summary for the dock's chain of thought.
+			reasoning: { level: "low", summary: true },
 			abortController,
 		});
 		return toServerSentEventsResponse(stream, { abortController });

@@ -35,7 +35,8 @@ export function NavButtons({ layout }: { layout: "corner" | "center" }) {
 			className={cn(
 				"flex gap-4",
 				corner
-					? "fixed right-5 bottom-[calc(var(--mayor-dock,0px)+1.25rem)] z-20 2xl:bottom-5"
+					? // Beside the chat input bar from lg up; above it on narrower screens.
+						"fixed right-5 bottom-[calc(var(--mayor-dock,0px)+1.25rem)] z-20 lg:bottom-5"
 					: "flex-wrap justify-center",
 			)}
 		>
@@ -44,14 +45,17 @@ export function NavButtons({ layout }: { layout: "corner" | "center" }) {
 					key={label}
 					asChild
 					font="retro"
-					className={cn("text-xs", corner && "max-sm:hidden")}
+					size={corner ? "sm" : "default"}
+					className={
+						corner ? "hidden text-[10px] min-[1400px]:inline-flex" : "text-xs"
+					}
 				>
 					<a
 						href={href}
 						aria-label={name}
 						{...(external ? { target: "_blank", rel: "noreferrer" } : {})}
 					>
-						<Icon className="size-4" />
+						<Icon className={corner ? "size-3.5" : "size-4"} />
 						{label}
 					</a>
 				</Button>
@@ -62,7 +66,7 @@ export function NavButtons({ layout }: { layout: "corner" | "center" }) {
 						key={`${label}-icon`}
 						asChild
 						size="icon"
-						className="sm:hidden"
+						className="min-[1400px]:hidden"
 					>
 						<a
 							href={href}

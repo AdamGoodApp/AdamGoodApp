@@ -73,7 +73,7 @@ describe("MayorDock", () => {
 		expect(dock().dataset.state).toBe("collapsed");
 	});
 
-	it("shows tool steps and markdown in the Mayor's answers", () => {
+	it("summarises tool steps in a chain of thought and renders markdown answers", () => {
 		chat.messages = [
 			{
 				id: "a1",
@@ -103,7 +103,9 @@ describe("MayorDock", () => {
 		];
 		renderDock();
 		const messages = screen.getByTestId("mayor-messages");
-		expect(messages.textContent).toContain("Mayor");
+		// Collapsed once the answer is in: just the summary.
+		expect(messages.textContent).not.toContain("Focus a district");
+		fireEvent.click(screen.getByText("Took 2 steps, 1 failed"));
 		expect(messages.textContent).toContain("Focus a district · The Beach");
 		expect(messages.textContent).toContain("· No city here");
 		expect(screen.getByText("Beach").tagName).toBe("STRONG");

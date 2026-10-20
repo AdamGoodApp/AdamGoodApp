@@ -6,10 +6,8 @@ import {
 import LiquidGlass from "liquid-glass-react";
 import {
 	ArrowUp,
-	Check,
 	ChevronDown,
 	ChevronUp,
-	LoaderCircle,
 	Paperclip,
 	Plus,
 	RotateCcw,
@@ -26,7 +24,7 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { Bubble, BubbleContent } from "#/components/ui/bubble";
+import type { TourAudienceAnswer } from "#/chat/tour";
 import { Button } from "#/components/ui/button";
 import {
 	InputGroup,
@@ -34,11 +32,7 @@ import {
 	InputGroupButton,
 	InputGroupTextarea,
 } from "#/components/ui/input-group";
-import {
-	Message,
-	MessageContent,
-	MessageHeader,
-} from "#/components/ui/message";
+import { Message, MessageContent } from "#/components/ui/message";
 import {
 	MessageScroller,
 	MessageScrollerButton,
@@ -56,10 +50,12 @@ import {
 	attachmentParts,
 	readAttachment,
 } from "./attachments";
+import { ChainOfThought, type ThoughtStep } from "./ChainOfThought";
 import type { MayorChatProps } from "./MayorChat";
 import { MayorMarkdown } from "./MayorMarkdown";
 import { clearMessages, loadMessages, saveMessages } from "./persistence";
 import { MAYOR_SUGGESTIONS, type MayorSuggestion } from "./suggestions";
+import { TourChoices } from "./TourChoices";
 import { describeToolCall } from "./tool-steps";
 
 const CONNECTION = fetchServerSentEvents("/api/chat");
@@ -116,91 +112,114 @@ function friendlyError(error: Error): string {
 	return "Something went wrong talking to the Mayor. Please try again.";
 }
 
-function ToolStep({ part, done }: { part: ToolCall; done: boolean }) {
-	const error = done ? toolError(part) : null;
-	const icon = !done ? (
-		<LoaderCircle className="size-3.5 animate-spin" />
-	) : error ? (
-		<X className="size-3.5 text-[#ff8a80]" />
-	) : (
-		<Check className="size-3.5 text-[#86efac]" />
-	);
+/** The steps the Mayor took for one request: its reasoning and every tool call except the tour question. */
+function thoughtSteps(answers: readonly UIMessage[], busy: boolean) {
+	const steps: ThoughtStep[] = [];
+	for (const m of answers) {
+		const results = resultIds(m);
+		m.parts.forEach((p, i) => {
+			if (p.type === "thinking" && p.content.trim()) {
+				steps.push({
+					id: `${m.id}-${i}`,
+					title: "Reasoning",
+					status: "done",
+					detail: p.content.trim(),
+				});
+			} else if (p.type === "tool-call" && p.name !== "ask_tour_audience") {
+				const done = toolDone(p, results);
+				const error = done ? toolError(p) : null;
+				steps.push({
+					id: p.id,
+					title: describeToolCall(p),
+					// A call that never finished (stopped, or restored from storage) is not still running.
+					status:
+						error || (!done && !busy) ? "error" : done ? "done" : "running",
+					error: error ?? (done || busy ? undefined : "stopped"),
+				});
+			}
+		});
+	}
+	return steps;
+}
+
+/** The request the panel's output answers: one muted line, like a label. */
+function RequestHeader({ message }: { message: UIMessage }) {
+	const first = message.parts.find((p) => p.type === "text");
+	const file = attachmentName(message);
 	return (
-		<div className="flex items-center gap-2 text-xs text-white/70">
-			{icon}
-			<span>{describeToolCall(part)}</span>
-			{error && <span className="text-[#ff8a80]">· {error}</span>}
+		<div className="retro flex min-w-0 items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-[9px] text-white/70">
+			{file && <Paperclip className="size-3 shrink-0" aria-label={file} />}
+			<span className="truncate" title={first?.content}>
+				{first?.content || file}
+			</span>
 		</div>
 	);
 }
 
-function UserMessage({ message }: { message: UIMessage }) {
-	const first = message.parts.find((p) => p.type === "text");
-	const file = attachmentName(message);
-	return (
-		<Message align="end">
-			<MessageContent>
-				{first && (
-					<Bubble
-						align="end"
-						variant="muted"
-						className="*:data-[slot=bubble-content]:bg-white/15 *:data-[slot=bubble-content]:text-white"
-					>
-						<BubbleContent className="whitespace-pre-wrap">
-							{first.content}
-						</BubbleContent>
-					</Bubble>
-				)}
-				{file && (
-					<span className="flex items-center gap-1 self-end text-xs text-white/70">
-						<Paperclip className="size-3" /> {file}
-					</span>
-				)}
-			</MessageContent>
-		</Message>
-	);
-}
-
-function AssistantMessage({ message }: { message: UIMessage }) {
+function AssistantMessage({
+	message,
+	onAnswer,
+}: {
+	message: UIMessage;
+	/** Answers an open ask_tour_audience call; absent while the Mayor is busy. */
+	onAnswer?: (toolCallId: string, answer: TourAudienceAnswer) => void;
+}) {
 	const results = resultIds(message);
 	const body: ReactNode[] = [];
 	message.parts.forEach((p, i) => {
 		const key = `${message.id}-${i}`;
-		if (p.type === "tool-call") {
-			body.push(<ToolStep key={key} part={p} done={toolDone(p, results)} />);
+		if (p.type === "tool-call" && p.name === "ask_tour_audience") {
+			const done = toolDone(p, results);
+			body.push(
+				<TourChoices
+					key={key}
+					answer={p.output}
+					onPick={
+						done || !onAnswer
+							? undefined
+							: (audience) => onAnswer(p.id, { audience })
+					}
+				/>,
+			);
 		} else if (p.type === "text" && p.content.trim()) {
 			body.push(<MayorMarkdown key={key}>{p.content}</MayorMarkdown>);
 		}
 	});
 	return (
 		<Message>
-			<MessageContent className="gap-2 text-white">
-				<MessageHeader className="px-0">
-					<span className="retro text-[10px] text-[#f0a585]">Mayor</span>
-				</MessageHeader>
-				{body}
-			</MessageContent>
+			<MessageContent className="gap-2 text-white">{body}</MessageContent>
 		</Message>
 	);
 }
 
+/** shadcn Suggestion: one sliding row of prompt buttons, in the dock's glass styling. */
 function SuggestionPills({
 	onPick,
 }: {
 	onPick(suggestion: MayorSuggestion): void;
 }) {
 	return (
-		<div className="no-scrollbar flex gap-2 overflow-x-auto px-1 pb-1 sm:flex-wrap sm:justify-center sm:overflow-visible lg:-mx-28">
+		<div
+			data-testid="mayor-suggestions"
+			data-own-scroll
+			onWheel={(e) => {
+				// A plain mouse wheel scrolls the row sideways; trackpad swipes already do.
+				if (Math.abs(e.deltaY) > Math.abs(e.deltaX))
+					e.currentTarget.scrollLeft += e.deltaY;
+			}}
+			className="flex scroll-fade-x scrollbar-none gap-2 overflow-x-auto overscroll-x-contain px-1 py-1"
+		>
 			{MAYOR_SUGGESTIONS.map((s) => (
-				<button
+				<Button
 					key={s.id}
-					type="button"
+					variant="outline"
+					size="sm"
 					onClick={() => onPick(s)}
-					className="flex shrink-0 items-center gap-1.5 rounded-full border border-white/20 bg-black/35 px-3.5 py-1.5 text-xs font-medium text-white backdrop-blur-md transition hover:bg-black/50 focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:outline-none"
+					className="retro shrink-0 rounded-full border-white/20 bg-black/35 text-[9px] text-white shadow-none backdrop-blur-md hover:bg-black/50 hover:text-white focus-visible:ring-white/60 dark:border-white/20 dark:bg-black/35 dark:hover:bg-black/50"
 				>
 					<s.icon className="size-3.5" />
 					{s.label}
-				</button>
+				</Button>
 			))}
 		</div>
 	);
@@ -229,14 +248,48 @@ export function MayorDock({ worldRef, select, hover }: MayorChatProps) {
 	const [restoredIds] = useState(
 		() => new Set(initialMessages.map((m) => m.id)),
 	);
-	const { messages, sendMessage, status, error, stop, clear } = useChat({
-		connection: CONNECTION,
-		tools: CITY_CLIENT_TOOLS,
-		context,
-		initialMessages,
-		onError: (e) => console.error("[mayor]", e),
-	});
+	const { messages, sendMessage, addToolResult, status, error, stop, clear } =
+		useChat({
+			connection: CONNECTION,
+			tools: CITY_CLIENT_TOOLS,
+			context,
+			initialMessages,
+			onError: (e) => console.error("[mayor]", e),
+		});
 	const busy = status === "submitted" || status === "streaming";
+
+	// Output only: the panel shows the latest request, the steps taken and the answer.
+	const turn = messages.slice(
+		Math.max(0, messages.map((m) => m.role).lastIndexOf("user")),
+	);
+	const request = turn[0]?.role === "user" ? turn[0] : undefined;
+	const answers = turn.filter((m) => m.role === "assistant");
+	// Messages that only called tools live in the chain of thought, not as empty rows.
+	const shown = answers.filter((m) =>
+		m.parts.some(
+			(p) =>
+				(p.type === "text" && p.content.trim()) ||
+				(p.type === "tool-call" && p.name === "ask_tour_audience"),
+		),
+	);
+	const steps = thoughtSteps(answers, busy);
+	const answering = answers.at(-1)?.parts.at(-1)?.type === "text";
+
+	// The Mayor's open "who is the tour for?" question, answered by a choice or the next typed message.
+	const last = messages.at(-1);
+	const openQuestion =
+		last?.role === "assistant"
+			? last.parts.find(
+					(p): p is ToolCall =>
+						p.type === "tool-call" &&
+						p.name === "ask_tour_audience" &&
+						!toolDone(p, resultIds(last)),
+				)
+			: undefined;
+
+	function answer(toolCallId: string, output: TourAudienceAnswer) {
+		void addToolResult({ toolCallId, tool: "ask_tour_audience", output });
+	}
 
 	useEffect(() => {
 		if (status === "ready") saveMessages(messages);
@@ -299,6 +352,15 @@ export function MayorDock({ worldRef, select, hover }: MayorChatProps) {
 
 	function send(text = draft, file = attachment) {
 		if (busy || (!text.trim() && !file)) return;
+		if (openQuestion && text.trim()) {
+			// A typed reply answers the question; an attachment waits for the next send.
+			answer(openQuestion.id, { reply: text.trim() });
+			setDraft("");
+			setAttachment(file);
+			if (textareaRef.current) textareaRef.current.style.height = "";
+			setExpanded(true);
+			return;
+		}
 		if (file) {
 			void sendMessage({
 				content: attachmentParts(text, file),
@@ -363,233 +425,254 @@ export function MayorDock({ worldRef, select, hover }: MayorChatProps) {
 	const iconButton = "size-8 text-white/70 hover:bg-white/10 hover:text-white";
 
 	return (
-		<div
-			ref={dockRef}
-			data-testid="mayor-dock"
-			data-state={expanded ? "expanded" : "collapsed"}
-			className="fixed bottom-5 left-1/2 z-30 flex w-[min(640px,calc(100vw-2rem))] -translate-x-1/2 flex-col items-stretch gap-3 max-sm:bottom-4"
-		>
-			{!expanded && <SuggestionPills onPick={pick} />}
-			<div
-				className="mayor-glass relative w-full"
-				style={{ height: glassHeight }}
+		<>
+			<section
+				data-testid="mayor-history"
+				data-state={expanded ? "expanded" : "collapsed"}
+				data-own-scroll
+				aria-label="Conversation with the Mayor"
+				inert={!expanded}
+				className={cn(
+					"fixed z-30 flex flex-col overflow-hidden rounded-[28px] border border-white/15 bg-[#101012]/70 font-sans text-sm leading-normal text-white shadow-2xl backdrop-blur-xl [text-shadow:none] transition-[opacity,translate,visibility] duration-300 ease-out motion-reduce:transition-none",
+					// Desktop: middle left, clear of the city, and short enough to stay above the input bar.
+					// Phones: just above the input bar.
+					"sm:top-1/2 sm:left-5 sm:h-[min(680px,calc(100dvh-2*var(--mayor-dock,6rem)-2rem))] sm:w-[min(280px,calc(100vw-2.5rem))] sm:-translate-y-1/2",
+					"max-sm:inset-x-4 max-sm:bottom-[calc(var(--mayor-dock,6rem)+0.75rem)] max-sm:h-[min(56vh,520px)]",
+					expanded
+						? "opacity-100"
+						: "invisible opacity-0 max-sm:translate-y-4 sm:-translate-x-4",
+				)}
 			>
-				<LiquidGlass
-					displacementScale={40}
-					blurAmount={0.35}
-					saturation={120}
-					aberrationIntensity={1.5}
-					elasticity={0}
-					cornerRadius={28}
-					padding="0"
-					mode="standard"
-					className="flex"
-					style={{ position: "absolute", top: "50%", left: "50%" }}
-				>
-					<div
-						ref={bodyRef}
-						data-testid="mayor-chat"
-						className="mayor-chat relative w-[min(640px,calc(100vw-2rem))] overflow-hidden rounded-[28px] bg-[#101012]/55 font-sans text-sm leading-normal text-white [text-shadow:none]"
-					>
-						<div className="mayor-edge" aria-hidden="true" />
-						<div className="mayor-ring" aria-hidden="true" />
-						<div
-							className="grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none"
-							style={{ gridTemplateRows: expanded ? "1fr" : "0fr" }}
-						>
-							<div
-								inert={!expanded}
-								className={cn(
-									"min-h-0 overflow-hidden transition-[visibility] duration-300",
-									!expanded && "invisible",
-								)}
-							>
-								<header className="flex items-center justify-between px-5 pt-4 pb-2">
-									<div>
-										<p className="retro text-[10px] text-[#f0a585]">
-											THE MAYOR
-										</p>
-										<p className="text-xs text-white/60">
-											Ask about Adam's work — the city answers.
-										</p>
-									</div>
-									<div className="flex gap-1">
-										<Button
-											variant="ghost"
-											size="icon"
-											aria-label="New chat"
-											title="New chat"
-											className={iconButton}
-											onClick={newChat}
-										>
-											<RotateCcw />
-										</Button>
-										<Button
-											variant="ghost"
-											size="icon"
-											aria-label="Minimise chat"
-											title="Minimise chat"
-											className={iconButton}
-											onClick={() => setExpanded(false)}
-										>
-											<ChevronDown />
-										</Button>
-									</div>
-								</header>
-								<div className="h-[min(56vh,520px)] px-2">
-									<MessageScrollerProvider>
-										<MessageScroller>
-											<MessageScrollerViewport>
-												<MessageScrollerContent
-													data-testid="mayor-messages"
-													aria-busy={busy}
-													aria-live="polite"
-													className="gap-5 px-3 py-2"
-												>
-													{messages.map((m) =>
-														m.role === "user" || m.role === "assistant" ? (
-															<MessageScrollerItem
-																key={m.id}
-																messageId={m.id}
-																scrollAnchor={m.role === "user"}
-															>
-																{m.role === "user" ? (
-																	<UserMessage message={m} />
-																) : (
-																	<AssistantMessage message={m} />
-																)}
-															</MessageScrollerItem>
-														) : null,
-													)}
-													{status === "submitted" && (
-														<p className="animate-pulse text-xs text-white/70">
-															The Mayor is thinking…
-														</p>
-													)}
-													{error && (
-														<p role="alert" className="text-xs text-[#ff8a80]">
-															{friendlyError(error)}
-														</p>
-													)}
-												</MessageScrollerContent>
-											</MessageScrollerViewport>
-											<MessageScrollerButton className="rounded-full border-0 bg-white/90 text-black hover:bg-white" />
-										</MessageScroller>
-									</MessageScrollerProvider>
-								</div>
-							</div>
-						</div>
-						<form onSubmit={onSubmit} className="relative px-3 pt-2 pb-3">
-							<InputGroup className="border-0 bg-transparent shadow-none has-[[data-slot=input-group-control]:focus-visible]:border-0 has-[[data-slot=input-group-control]:focus-visible]:ring-0 dark:bg-transparent">
-								<InputGroupTextarea
-									ref={textareaRef}
-									data-testid="mayor-input"
-									value={draft}
-									onChange={(e) => {
-										setDraft(e.target.value);
-										// Grow with the text (field-sizing is not in every browser yet).
-										e.target.style.height = "auto";
-										e.target.style.height = `${e.target.scrollHeight}px`;
-									}}
-									onKeyDown={onKeyDown}
-									rows={1}
-									placeholder="Ask the Mayor about Adam…"
-									aria-label="Message the Mayor"
-									className="max-h-40 min-h-11 px-3 text-base text-white placeholder:text-white/50 md:text-[15px]"
-								/>
-								<InputGroupAddon
-									align="block-end"
-									className="cursor-default gap-2 px-1 pb-0"
-								>
-									<InputGroupButton
-										size="icon-sm"
-										variant="ghost"
-										aria-label="Attach a job description"
-										title="Attach a job description (PDF, TXT or MD)"
-										className="rounded-full text-white/80 hover:bg-white/10 hover:text-white"
-										onClick={() => {
-											sendAfterPick.current = null;
-											fileRef.current?.click();
-										}}
-									>
-										<Plus />
-									</InputGroupButton>
-									{attachment && (
-										<span
-											data-testid="mayor-attachment"
-											className="flex min-w-0 items-center gap-1 rounded-full bg-white/10 py-0.5 pr-1 pl-2.5 text-xs text-white"
-										>
-											<Paperclip className="size-3 shrink-0" />
-											<span className="truncate">{attachment.name}</span>
-											<span className="shrink-0 text-white/50">
-												{Math.max(1, Math.round(attachment.size / 1024))} KB
-											</span>
-											<button
-												type="button"
-												aria-label="Remove attachment"
-												className="rounded-full p-0.5 hover:bg-white/15"
-												onClick={() => setAttachment(null)}
-											>
-												<X className="size-3" />
-											</button>
-										</span>
-									)}
-									{attachError && (
-										<span role="alert" className="text-xs text-[#ff8a80]">
-											{attachError}
-										</span>
-									)}
-									<span className="ml-auto" />
-									{!expanded && messages.length > 0 && (
-										<InputGroupButton
-											size="icon-sm"
-											variant="ghost"
-											aria-label="Show conversation"
-											title="Show conversation"
-											className="rounded-full text-white/80 hover:bg-white/10 hover:text-white"
-											onClick={() => setExpanded(true)}
-										>
-											<ChevronUp />
-										</InputGroupButton>
-									)}
-									{busy ? (
-										<InputGroupButton
-											size="icon-sm"
-											aria-label="Stop"
-											className="rounded-full bg-white/15 text-white hover:bg-white/25"
-											onClick={stop}
-										>
-											<Square className="size-3.5 fill-current" />
-										</InputGroupButton>
-									) : (
-										<InputGroupButton
-											type="submit"
-											size="icon-sm"
-											variant="default"
-											aria-label="Send"
-											disabled={!canSend}
-											className="rounded-full bg-white text-black hover:bg-white/85 disabled:bg-white/10 disabled:text-white/40 disabled:opacity-100"
-										>
-											<ArrowUp />
-										</InputGroupButton>
-									)}
-								</InputGroupAddon>
-							</InputGroup>
-						</form>
+				<header className="flex items-center justify-between px-5 pt-4 pb-2">
+					<div>
+						<p className="retro text-[10px] text-[#f0a585]">THE MAYOR</p>
+						<p className="retro text-[8px] leading-[1.8] text-white/60">
+							Ask about Adam's work — the city answers.
+						</p>
 					</div>
-				</LiquidGlass>
+					<div className="flex gap-1">
+						<Button
+							variant="ghost"
+							size="icon"
+							aria-label="New chat"
+							title="New chat"
+							className={iconButton}
+							onClick={newChat}
+						>
+							<RotateCcw />
+						</Button>
+						<Button
+							variant="ghost"
+							size="icon"
+							aria-label="Minimise chat"
+							title="Minimise chat"
+							className={iconButton}
+							onClick={() => setExpanded(false)}
+						>
+							<ChevronDown />
+						</Button>
+					</div>
+				</header>
+				<div className="min-h-0 flex-1 px-2 pb-2">
+					<MessageScrollerProvider>
+						<MessageScroller>
+							<MessageScrollerViewport>
+								<MessageScrollerContent
+									data-testid="mayor-messages"
+									aria-busy={busy}
+									aria-live="polite"
+									className="gap-5 px-3 py-2"
+								>
+									{request && (
+										<MessageScrollerItem
+											key={request.id}
+											messageId={request.id}
+											scrollAnchor
+										>
+											<RequestHeader message={request} />
+										</MessageScrollerItem>
+									)}
+									{steps.length > 0 && (
+										<ChainOfThought
+											key={request?.id}
+											steps={steps}
+											running={busy && !answering}
+										/>
+									)}
+									{shown.map((m) => (
+										<MessageScrollerItem key={m.id} messageId={m.id}>
+											<AssistantMessage
+												message={m}
+												onAnswer={busy ? undefined : answer}
+											/>
+										</MessageScrollerItem>
+									))}
+									{status === "submitted" && steps.length === 0 && (
+										<p className="retro animate-pulse text-[9px] leading-[1.8] text-white/70">
+											The Mayor is thinking…
+										</p>
+									)}
+									{error && (
+										<p
+											role="alert"
+											className="retro text-[9px] leading-[1.8] text-[#ff8a80]"
+										>
+											{friendlyError(error)}
+										</p>
+									)}
+								</MessageScrollerContent>
+							</MessageScrollerViewport>
+							<MessageScrollerButton className="rounded-full border-0 bg-white/90 text-black hover:bg-white" />
+						</MessageScroller>
+					</MessageScrollerProvider>
+				</div>
+			</section>
+			<div
+				ref={dockRef}
+				data-testid="mayor-dock"
+				data-state={expanded ? "expanded" : "collapsed"}
+				className="fixed bottom-5 left-1/2 z-30 flex w-[min(640px,calc(100vw-2rem))] -translate-x-1/2 flex-col items-stretch gap-3 max-sm:bottom-4"
+			>
+				{!expanded && <SuggestionPills onPick={pick} />}
+				<div
+					className="mayor-glass relative w-full"
+					style={{ height: glassHeight }}
+				>
+					<LiquidGlass
+						displacementScale={40}
+						blurAmount={0.35}
+						saturation={120}
+						aberrationIntensity={1.5}
+						elasticity={0}
+						cornerRadius={28}
+						padding="0"
+						mode="standard"
+						className="flex"
+						style={{ position: "absolute", top: "50%", left: "50%" }}
+					>
+						<div
+							ref={bodyRef}
+							data-testid="mayor-chat"
+							className="mayor-chat relative w-[min(640px,calc(100vw-2rem))] overflow-hidden rounded-[28px] bg-[#101012]/55 font-sans text-sm leading-normal text-white [text-shadow:none]"
+						>
+							<div className="mayor-edge" aria-hidden="true" />
+							<div className="mayor-ring" aria-hidden="true" />
+							<form onSubmit={onSubmit} className="relative px-3 pt-2 pb-3">
+								<InputGroup className="border-0 bg-transparent shadow-none has-[[data-slot=input-group-control]:focus-visible]:border-0 has-[[data-slot=input-group-control]:focus-visible]:ring-0 dark:bg-transparent">
+									<InputGroupTextarea
+										ref={textareaRef}
+										data-testid="mayor-input"
+										data-own-scroll
+										value={draft}
+										onChange={(e) => {
+											setDraft(e.target.value);
+											// Grow with the text (field-sizing is not in every browser yet).
+											e.target.style.height = "auto";
+											e.target.style.height = `${e.target.scrollHeight}px`;
+										}}
+										onKeyDown={onKeyDown}
+										rows={1}
+										placeholder="Ask the Mayor about Adam…"
+										aria-label="Message the Mayor"
+										className="retro max-h-40 min-h-11 px-3 text-base leading-[1.8] text-white placeholder:text-white/50 sm:text-[11px]"
+									/>
+									<InputGroupAddon
+										align="block-end"
+										className="cursor-default gap-2 px-1 pb-0"
+									>
+										<InputGroupButton
+											size="icon-sm"
+											variant="ghost"
+											aria-label="Attach a job description"
+											title="Attach a job description (PDF, TXT or MD)"
+											className="rounded-full text-white/80 hover:bg-white/10 hover:text-white"
+											onClick={() => {
+												sendAfterPick.current = null;
+												fileRef.current?.click();
+											}}
+										>
+											<Plus />
+										</InputGroupButton>
+										{attachment && (
+											<span
+												data-testid="mayor-attachment"
+												className="retro flex min-w-0 items-center gap-1 rounded-full bg-white/10 py-0.5 pr-1 pl-2.5 text-[9px] text-white"
+											>
+												<Paperclip className="size-3 shrink-0" />
+												<span className="truncate">{attachment.name}</span>
+												<span className="shrink-0 text-white/50">
+													{Math.max(1, Math.round(attachment.size / 1024))} KB
+												</span>
+												<button
+													type="button"
+													aria-label="Remove attachment"
+													className="rounded-full p-0.5 hover:bg-white/15"
+													onClick={() => setAttachment(null)}
+												>
+													<X className="size-3" />
+												</button>
+											</span>
+										)}
+										{attachError && (
+											<span
+												role="alert"
+												className="retro text-[9px] leading-[1.8] text-[#ff8a80]"
+											>
+												{attachError}
+											</span>
+										)}
+										<span className="ml-auto" />
+										{!expanded && messages.length > 0 && (
+											<InputGroupButton
+												size="icon-sm"
+												variant="ghost"
+												aria-label="Show conversation"
+												title="Show conversation"
+												className="rounded-full text-white/80 hover:bg-white/10 hover:text-white"
+												onClick={() => setExpanded(true)}
+											>
+												<ChevronUp />
+											</InputGroupButton>
+										)}
+										{busy ? (
+											<InputGroupButton
+												size="icon-sm"
+												aria-label="Stop"
+												className="rounded-full bg-white/15 text-white hover:bg-white/25"
+												onClick={stop}
+											>
+												<Square className="size-3.5 fill-current" />
+											</InputGroupButton>
+										) : (
+											<InputGroupButton
+												type="submit"
+												size="icon-sm"
+												variant="default"
+												aria-label="Send"
+												disabled={!canSend}
+												className="rounded-full bg-white text-black hover:bg-white/85 disabled:bg-white/10 disabled:text-white/40 disabled:opacity-100"
+											>
+												<ArrowUp />
+											</InputGroupButton>
+										)}
+									</InputGroupAddon>
+								</InputGroup>
+							</form>
+						</div>
+					</LiquidGlass>
+				</div>
+				<input
+					ref={fileRef}
+					type="file"
+					hidden
+					data-testid="mayor-file"
+					accept={ACCEPT}
+					onChange={(e) => {
+						void onFile(e.target.files?.[0]);
+						e.target.value = "";
+					}}
+				/>
 			</div>
-			<input
-				ref={fileRef}
-				type="file"
-				hidden
-				data-testid="mayor-file"
-				accept={ACCEPT}
-				onChange={(e) => {
-					void onFile(e.target.files?.[0]);
-					e.target.value = "";
-				}}
-			/>
-		</div>
+		</>
 	);
 }
