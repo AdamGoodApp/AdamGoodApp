@@ -27,6 +27,7 @@ import {
 	searchCv,
 	TOOL_META,
 } from "./definitions";
+import type { CvSearch } from "./semantic-search";
 
 export const CV_WIDGET_URI = "ui://adamgoodapp/cv-widget.html";
 
@@ -55,7 +56,7 @@ function jsonResult(value: object) {
 function addTool<I extends z.ZodObject, O extends z.ZodObject>(
 	server: McpServer,
 	def: DataDefinition<I, O>,
-	body: (args: z.output<I>) => z.input<O>,
+	body: (args: z.output<I>) => z.input<O> | Promise<z.input<O>>,
 ): void {
 	const meta = TOOL_META[def.name];
 	// Widened to the concrete ZodObject so the SDK's callback type resolves.
@@ -75,7 +76,7 @@ function addTool<I extends z.ZodObject, O extends z.ZodObject>(
 	};
 	// The SDK has validated the arguments already; parsing again gives `body` its typed input.
 	const callback = async (args: unknown) =>
-		jsonResult(body(def.inputSchema.parse(args)));
+		jsonResult(await body(def.inputSchema.parse(args)));
 	if (meta.widget) {
 		registerAppTool(
 			server,
@@ -95,7 +96,7 @@ function markdownResource(uri: URL, text: string) {
 }
 
 /** A fresh server per request: the handler is stateless. */
-export function createCityMcpServer(): McpServer {
+function createCityMcpServer(search: CvSearch): McpServer {
 	const server = new McpServer(
 		{
 			name: "adamgoodapp",
@@ -110,7 +111,7 @@ export function createCityMcpServer(): McpServer {
 	addTool(server, getProfile, b.get_profile);
 	addTool(server, listDistricts, b.list_districts);
 	addTool(server, getDistrictContent, b.get_district_content);
-	addTool(server, searchCv, b.search_cv);
+	addTool(server, searchCv, search);
 	addTool(server, listExperience, b.list_experience);
 	addTool(server, listSkills, b.list_skills);
 	addTool(server, listProjects, b.list_projects);
@@ -178,7 +179,10 @@ export function createCityMcpServer(): McpServer {
 	return server;
 }
 
-export const mcpHandler = createMcpHandler(createCityMcpServer);
+export interface McpRequestHandlerOptions {
+	/** search_cv body; defaults to keyword search (the Worker passes semantic search). */
+	searchCv?: CvSearch;
+}
 
 const CORS: Record<string, string> = {
 	"Access-Control-Allow-Origin": "*",
@@ -202,7 +206,19 @@ Resources: cv://profile, cv://sections/{district}, ${CV_WIDGET_URI} (MCP Apps ca
 `;
 
 /** Serves `/mcp`: CORS preflight, a plain-text page for browsers, MCP otherwise. */
-export async function handleMcpRequest(request: Request): Promise<Response> {
+export function createMcpRequestHandler(
+	options: McpRequestHandlerOptions = {},
+): (request: Request) => Promise<Response> {
+	const search =
+		options.searchCv ?? (async (args) => DATA_TOOL_BODIES.search_cv(args));
+	const mcpHandler = createMcpHandler(() => createCityMcpServer(search));
+	return (request) => handleMcpRequest(request, mcpHandler);
+}
+
+async function handleMcpRequest(
+	request: Request,
+	mcpHandler: { fetch(request: Request): Promise<Response> },
+): Promise<Response> {
 	if (request.method === "OPTIONS") {
 		// Echo the requested headers: MCP clients add new ones (v2 sends Mcp-Method/Mcp-Name).
 		const requested = request.headers.get("access-control-request-headers");

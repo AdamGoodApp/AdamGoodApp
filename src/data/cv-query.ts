@@ -228,6 +228,33 @@ function snippet(text: string): string {
 	return text.length > SNIPPET_MAX ? `${text.slice(0, SNIPPET_MAX)}…` : text;
 }
 
+/** One searchable unit of the CV (a bullet, a role line, a skill list…), in document order. */
+export interface SearchDocument {
+	zoneId: ZoneId;
+	heading: string;
+	text: string;
+}
+
+/** Every searchable unit of the CV: the keyword search and the semantic index share these. */
+export const SEARCH_DOCUMENTS: readonly SearchDocument[] = ZONES.flatMap(
+	(zone) => searchUnits(zone.id).map((unit) => ({ zoneId: zone.id, ...unit })),
+);
+
+export const MAX_SEARCH_LIMIT = 20;
+
+/** A search result for a document, with the district and chapter it belongs to. */
+export function searchHit(doc: SearchDocument, score: number): SearchHit {
+	return {
+		zoneId: doc.zoneId,
+		district: ZONE_BY_ID[doc.zoneId].district,
+		title: CV[doc.zoneId].title,
+		heading: doc.heading,
+		snippet: snippet(doc.text),
+		score,
+	};
+}
+
+/** Keyword search: a point per matched term, plus one when every term matches. */
 export function searchCv(query: string, limit = 5): SearchHit[] {
 	const terms = [
 		...new Set(
@@ -238,29 +265,21 @@ export function searchCv(query: string, limit = 5): SearchHit[] {
 		),
 	];
 	if (terms.length === 0) return [];
-	const hits: (SearchHit & { order: number })[] = [];
-	let order = 0;
-	for (const zone of ZONES) {
-		for (const unit of searchUnits(zone.id)) {
-			const haystack = unit.text.toLowerCase();
-			const matched = terms.filter((t) => haystack.includes(t)).length;
-			order++;
-			if (matched === 0) continue;
-			hits.push({
-				zoneId: zone.id,
-				district: zone.district,
-				title: CV[zone.id].title,
-				heading: unit.heading,
-				snippet: snippet(unit.text),
-				score: matched + (matched === terms.length ? 1 : 0),
-				order,
-			});
-		}
-	}
+	const hits: { doc: SearchDocument; score: number; order: number }[] = [];
+	SEARCH_DOCUMENTS.forEach((doc, order) => {
+		const haystack = doc.text.toLowerCase();
+		const matched = terms.filter((t) => haystack.includes(t)).length;
+		if (matched === 0) return;
+		hits.push({
+			doc,
+			score: matched + (matched === terms.length ? 1 : 0),
+			order,
+		});
+	});
 	hits.sort((a, b) => b.score - a.score || a.order - b.order);
 	return hits
-		.slice(0, Math.max(0, Math.min(limit, 20)))
-		.map(({ order: _order, ...hit }) => hit);
+		.slice(0, Math.max(0, Math.min(limit, MAX_SEARCH_LIMIT)))
+		.map((h) => searchHit(h.doc, h.score));
 }
 
 export function experience(): { roles: Role[]; education: string[] } {

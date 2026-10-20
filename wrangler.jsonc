@@ -19,6 +19,9 @@
 			"simple": { "limit": 20, "period": 60 }
 		}
 	],
+	// CV search: Workers AI embeddings into the Vectorize index (src/mcp/semantic-search.ts).
+	"ai": { "binding": "AI" },
+	"vectorize": [{ "binding": "CV_INDEX", "index_name": "adamgoodapp-cv" }],
 	"observability": {
 		"logs": {
 			"enabled": true,

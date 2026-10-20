@@ -1,5 +1,11 @@
+import { env } from "cloudflare:workers";
 import { createFileRoute } from "@tanstack/react-router";
-import { handleMcpRequest } from "#/mcp/server";
+import { createCvSearch } from "#/mcp/semantic-search";
+import { createMcpRequestHandler } from "#/mcp/server";
+
+const handleMcpRequest = createMcpRequestHandler({
+	searchCv: createCvSearch(env),
+});
 
 /** Remote MCP server (Streamable HTTP) for Claude, ChatGPT and other MCP clients. */
 export const Route = createFileRoute("/mcp")({

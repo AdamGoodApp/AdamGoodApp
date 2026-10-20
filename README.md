@@ -55,6 +55,7 @@ The site is callable by AI agents three ways, all built from one set of TanStack
 - **Remote MCP server** at **`https://adamgoodapp.com/mcp`** (Streamable HTTP, stateless, no auth). Add it as a custom connector in Claude or ChatGPT, or point the MCP Inspector at it. Tools: `get_profile`, `list_districts`, `get_district_content`, `search_cv`, `list_experience`, `list_skills`, `list_projects`, `get_contact`, `get_site_guide`; resources `cv://profile` and `cv://sections/{district}` (markdown).
 - **MCP Apps card.** Six of those tools carry `_meta.ui.resourceUri = ui://adamgoodapp/cv-widget.html`: hosts that support MCP Apps render the answer as the site's own 8-bit CV card inline in the chat (`src/mcp/apps/`, built into one HTML file by `vite.widget.config.ts`; its font loads from `/fonts`).
 - **In-page WebMCP tools** on `document.modelContext` for browser agents (native WebMCP, or the MCP-B polyfill and extension): the nine data tools plus city control — `get_city_state`, `focus_district`, `set_view`, `reset_view`, `open_district`, `close_district`, `highlight_district`, `highlight_spot` (ring a landmark or point), `set_time_of_day`, `control_simulation`, `show_message` (a message bubble) and `run_tour` (a guided camera tour with captions) — and city life: `get_city_events` (a news feed the simulation writes, `src/city/events.ts`: fire flare-ups, fire engine runs, bus arrivals, helicopter flights, festivals, plus landmarks) and `stage_event` (fire flare-up, fire engine dispatch, helicopter launch, park festival).
+- **Semantic CV search.** On the server (`/mcp` and the Mayor), `search_cv` searches by meaning: each CV unit (a bullet, a role line, a skill list) is embedded with Workers AI `@cf/baai/bge-base-en-v1.5` into the Vectorize index `adamgoodapp-cv`, so "video streaming" finds the U-NEXT work without the exact words (`src/mcp/semantic-search.ts`). Vectors live in a namespace named after a hash of the CV text and model, so a CV edit gets a fresh namespace on the first search after deploy, and old vectors are never matched. Until the new namespace is ready, and wherever the bindings are missing (CI, the in-browser WebMCP tools), it falls back to keyword matching; the result's `mode` says which one answered. Embedding calls go through the AI Gateway `main`, so they appear in its logs.
 
 ```sh
 curl -s https://adamgoodapp.com/mcp -H 'Content-Type: application/json' \
@@ -84,14 +85,14 @@ Without the token, the chat replies that the Mayor is off duty (HTTP 503).
 
 ## Stack
 
-TanStack Start (React 19, file-based routing, SSR, experimental React Server Components via `@vitejs/plugin-rsc`) on Cloudflare Workers · three.js r186 (`three/webgpu`, TSL) · TanStack Store · TanStack AI (chat, tool definitions, Anthropic adapter) via Cloudflare AI Gateway + MCP TypeScript SDK v2 + MCP Apps + MCP-B (WebMCP) · Tailwind CSS v4 · shadcn/ui + AI Elements + 8bitcn/ui · liquid-glass-react · Biome · Vitest · Playwright + axe · lefthook · GitHub Actions.
+TanStack Start (React 19, file-based routing, SSR, experimental React Server Components via `@vitejs/plugin-rsc`) on Cloudflare Workers · three.js r186 (`three/webgpu`, TSL) · TanStack Store · TanStack AI (chat, tool definitions, Anthropic adapter) via Cloudflare AI Gateway · Workers AI embeddings + Vectorize · MCP TypeScript SDK v2 + MCP Apps + MCP-B (WebMCP) · Tailwind CSS v4 · shadcn/ui + AI Elements + 8bitcn/ui · liquid-glass-react · Biome · Vitest · Playwright + axe · lefthook · GitHub Actions.
 
 ## Getting started
 
 ```sh
 corepack enable pnpm
 pnpm i
-pnpm dev            # http://localhost:3000 (?tier=webgl2|fallback forces a renderer, ?time=day|night pins the clock); MCP at /mcp, chat at /api/chat (needs CF_AIG_TOKEN in .dev.vars)
+pnpm dev            # http://localhost:3000 (?tier=webgl2|fallback forces a renderer, ?time=day|night pins the clock); MCP at /mcp, chat at /api/chat (needs CF_AIG_TOKEN in .dev.vars). Workers AI and Vectorize run remotely, so dev and preview need `wrangler login` or CLOUDFLARE_API_TOKEN; with CI set they are off and search_cv uses keywords
 pnpm test           # unit + component tests (builds the MCP Apps widget first)
 pnpm build && pnpm e2e
 pnpm preview & pnpm capture   # re-render public/city.jpg and public/og.jpg
@@ -102,7 +103,7 @@ pnpm preview & pnpm capture   # re-render public/city.jpg and public/og.jpg
 `.github/workflows/ci.yml` runs on every push and pull request:
 
 1. **check** — `biome ci`, `tsc`, Vitest, production build.
-2. **e2e** — Playwright (desktop, mobile and fallback specs, axe scan) against `pnpm preview` with SwiftShader.
+2. **e2e** — Playwright (desktop, mobile and fallback specs, axe scan) against `pnpm preview` with SwiftShader (no remote bindings in CI, so search is keyword-only there).
 3. **deploy** — on `main` only: `wrangler deploy` to the `adamgoodapp` Worker, which owns the custom domains `adamgoodapp.com` and `www.adamgoodapp.com` (`www` 301s to the apex).
 
 Required repository secrets: `CLOUDFLARE_API_TOKEN` (Workers Scripts edit + zone DNS/Workers Routes edit for `adamgoodapp.com`) and `CLOUDFLARE_ACCOUNT_ID`.

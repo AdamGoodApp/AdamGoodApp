@@ -283,7 +283,7 @@ export const getDistrictContent = toolDefinition({
 export const searchCv = toolDefinition({
 	name: "search_cv",
 	description:
-		"Keyword-search Adam's CV (roles, achievements, skills, projects) and get the best-matching snippets with their district.",
+		"Search Adam's CV (roles, achievements, skills, projects) by meaning and get the best-matching snippets with their district. Phrase the query in plain words (e.g. 'video streaming', 'leading a team'); exact names work too. `mode` says whether the semantic index or keyword matching answered.",
 	inputSchema: z.object({
 		query: z.string().min(1).max(200),
 		limit: z.number().int().min(1).max(20).default(DEFAULT_SEARCH_LIMIT),

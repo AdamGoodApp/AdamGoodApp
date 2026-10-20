@@ -20,9 +20,11 @@ export const DATA_TOOL_BODIES = {
 		kind: "district" as const,
 		...section(district),
 	}),
+	/** Keyword search; the server swaps in semantic search (./semantic-search.ts). */
 	search_cv: ({ query, limit }: { query: string; limit?: number }) => ({
 		kind: "search" as const,
 		query,
+		mode: "keyword" as const,
 		results: searchCv(query, limit ?? DEFAULT_SEARCH_LIMIT),
 	}),
 	list_experience: () => ({ kind: "experience" as const, ...experience() }),

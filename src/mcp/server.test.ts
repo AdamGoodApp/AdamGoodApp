@@ -5,7 +5,9 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DATA_TOOLS } from "./definitions";
 import { searchResult } from "./schemas";
-import { CV_WIDGET_URI, handleMcpRequest } from "./server";
+import { CV_WIDGET_URI, createMcpRequestHandler } from "./server";
+
+const handleMcpRequest = createMcpRequestHandler();
 
 let client: Client;
 

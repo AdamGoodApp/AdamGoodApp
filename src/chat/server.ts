@@ -18,6 +18,7 @@ import {
 	listSkills,
 	searchCv,
 } from "#/mcp/definitions";
+import type { CvSearch } from "#/mcp/semantic-search";
 import { MAYOR_SYSTEM_PROMPT } from "./system-prompt";
 import { askTourAudience } from "./tour";
 
@@ -28,6 +29,8 @@ export interface RateLimiter {
 export interface ChatHandlerOptions {
 	adapter: () => AnyTextAdapter | null;
 	rateLimiter?: RateLimiter | null;
+	/** search_cv body; defaults to keyword search (the Worker passes semantic search). */
+	searchCv?: CvSearch;
 }
 
 /** A 4 MB PDF is about 5.4 MB once base64-encoded inside the JSON body. */
@@ -61,19 +64,21 @@ export const CHAT_ERRORS = {
  * the live city or asks the visitor.
  * Tool declarations sent by the client are ignored: this list is the allowlist.
  */
-const TOOLS = [
-	getProfile.server(DATA_TOOL_BODIES.get_profile),
-	listDistricts.server(DATA_TOOL_BODIES.list_districts),
-	getDistrictContent.server(DATA_TOOL_BODIES.get_district_content),
-	searchCv.server(DATA_TOOL_BODIES.search_cv),
-	listExperience.server(DATA_TOOL_BODIES.list_experience),
-	listSkills.server(DATA_TOOL_BODIES.list_skills),
-	listProjects.server(DATA_TOOL_BODIES.list_projects),
-	getContact.server(DATA_TOOL_BODIES.get_contact),
-	getSiteGuide.server(DATA_TOOL_BODIES.get_site_guide),
-	...CITY_TOOLS,
-	askTourAudience,
-];
+function chatTools(search: CvSearch) {
+	return [
+		getProfile.server(DATA_TOOL_BODIES.get_profile),
+		listDistricts.server(DATA_TOOL_BODIES.list_districts),
+		getDistrictContent.server(DATA_TOOL_BODIES.get_district_content),
+		searchCv.server(search),
+		listExperience.server(DATA_TOOL_BODIES.list_experience),
+		listSkills.server(DATA_TOOL_BODIES.list_skills),
+		listProjects.server(DATA_TOOL_BODIES.list_projects),
+		getContact.server(DATA_TOOL_BODIES.get_contact),
+		getSiteGuide.server(DATA_TOOL_BODIES.get_site_guide),
+		...CITY_TOOLS,
+		askTourAudience,
+	];
+}
 
 function json(status: number, error: string): Response {
 	return Response.json({ error }, { status });
@@ -81,6 +86,9 @@ function json(status: number, error: string): Response {
 
 /** POST /api/chat: one Mayor turn, streamed as AG-UI server-sent events. */
 export function createChatHandler(options: ChatHandlerOptions) {
+	const tools = chatTools(
+		options.searchCv ?? (async (args) => DATA_TOOL_BODIES.search_cv(args)),
+	);
 	return async (request: Request): Promise<Response> => {
 		if (request.method !== "POST") return json(405, CHAT_ERRORS.method);
 
@@ -117,7 +125,7 @@ export function createChatHandler(options: ChatHandlerOptions) {
 			threadId: params.threadId,
 			runId: params.runId,
 			systemPrompts: [MAYOR_SYSTEM_PROMPT],
-			tools: TOOLS,
+			tools,
 			agentLoopStrategy: maxIterations(8),
 			// Stream a thinking summary for the dock's chain of thought.
 			reasoning: { level: "low", summary: true },

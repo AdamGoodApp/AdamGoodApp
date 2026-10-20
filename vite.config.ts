@@ -29,8 +29,11 @@ export default defineConfig({
 	},
 	plugins: [
 		// The React Server Components environment runs inside the same Worker as SSR.
+		// Workers AI and Vectorize only run remotely, which needs Cloudflare credentials:
+		// CI (no credentials) gets local stubs, and search_cv falls back to keyword search.
 		cloudflare({
 			viteEnvironment: { name: "ssr", childEnvironments: ["rsc"] },
+			remoteBindings: !process.env.CI,
 		}),
 		tailwindcss(),
 		tanstackStart({ rsc: { enabled: true } }),
