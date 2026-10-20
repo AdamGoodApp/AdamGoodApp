@@ -6,6 +6,7 @@ import {
 	Quaternion,
 	Vector3,
 } from "three";
+import type { CityEvents } from "../events";
 import { MAT_INSTANCED } from "../geometry";
 import { helicopter, helicopterRotor, plane } from "../prefabs";
 import type { BuildContext } from "../world/context";
@@ -20,6 +21,8 @@ const AIRLINER_FROM = new Vector3(-220, 75, 120);
 const AIRLINER_TO = new Vector3(220, 75, -120);
 
 const REST = 16;
+/** Seconds into the rest when the rotor starts spooling up for take-off. */
+const SPOOL_UP = 10;
 const CLIMB = 7;
 const FLIGHT = 42;
 const DESCEND = 9;
@@ -103,21 +106,48 @@ class HelicopterAgent implements Agent {
 	private yaw: number;
 	private roll = 0;
 	private angle = 0;
+	/** Cycle offset; a staged launch moves it forward to the spool-up. */
+	private offset = START_OFFSET;
+	private lastPh = -1;
+	private lastT = 0;
 
 	constructor(
 		private readonly body: Pool,
 		private readonly rotor: Pool,
+		private readonly events: CityEvents,
 	) {
 		this.route.tangentAt(0, this.tan);
 		this.startYaw = Math.atan2(this.tan.x, this.tan.z);
 		this.route.tangentAt(this.route.length, this.tan);
 		this.endYaw = Math.atan2(this.tan.x, this.tan.z);
 		this.yaw = this.startYaw;
+		events.landmark({
+			id: "helipad",
+			name: "Hospital helipad (medical helicopter)",
+			x: HELIPAD.x,
+			z: HELIPAD.z,
+			radius: 6,
+		});
+		events.onStage("launch_helicopter", () => {
+			const ph = (this.lastT + this.offset) % PERIOD;
+			if (ph >= REST)
+				return {
+					ok: false,
+					text: "The medical helicopter is already in the air",
+				};
+			if (ph < SPOOL_UP) this.offset += SPOOL_UP - ph;
+			return {
+				ok: true,
+				text: "The medical helicopter spools up on the hospital roof",
+			};
+		});
 	}
 
 	update(dt: number, t: number): void {
 		const { route, pos, tan } = this;
-		const ph = (t + START_OFFSET) % PERIOD;
+		this.lastT = t;
+		const ph = (t + this.offset) % PERIOD;
+		this.announce(ph);
 		let yaw = this.startYaw;
 		let spool = 1;
 		let forward = 0;
@@ -125,7 +155,12 @@ class HelicopterAgent implements Agent {
 
 		if (ph < REST) {
 			pos.copy(HELIPAD);
-			spool = ph < 5 ? 1 - ph / 5 : ph < 10 ? 0 : (ph - 10) / 6;
+			spool =
+				ph < 5
+					? 1 - ph / 5
+					: ph < SPOOL_UP
+						? 0
+						: (ph - SPOOL_UP) / (REST - SPOOL_UP);
 		} else if (ph < REST + CLIMB) {
 			const f = smooth((ph - REST) / CLIMB);
 			pos.set(start.x, HELIPAD.y + (CRUISE_Y - HELIPAD.y) * f, start.z);
@@ -162,6 +197,29 @@ class HelicopterAgent implements Agent {
 		this.rotor.mesh.setMatrixAt(0, this.matrix);
 		this.rotor.commit();
 	}
+
+	/** Logs take-off and the start of the descent as the cycle crosses them. */
+	private announce(ph: number): void {
+		const last = this.lastPh;
+		this.lastPh = ph;
+		if (last < 0) return;
+		const crossed = (at: number) => last < at && ph >= at;
+		if (crossed(REST)) {
+			this.events.emit(
+				"helicopter_takeoff",
+				"The medical helicopter lifts off from the hospital roof",
+				HELIPAD.x,
+				HELIPAD.z,
+			);
+		} else if (crossed(REST + CLIMB + FLIGHT)) {
+			this.events.emit(
+				"helicopter_landing",
+				"The medical helicopter comes in to land at the hospital",
+				HELIPAD.x,
+				HELIPAD.z,
+			);
+		}
+	}
 }
 
 /** Airliner crossing the sky (1 pool) plus the hospital's medical helicopter (body + rotor pools). */
@@ -172,6 +230,6 @@ export function createSkyTraffic(ctx: BuildContext): void {
 	ctx.group.add(airliner.mesh, body.mesh, rotor.mesh);
 	ctx.agents.push(
 		new AirlinerAgent(airliner),
-		new HelicopterAgent(body, rotor),
+		new HelicopterAgent(body, rotor, ctx.events),
 	);
 }

@@ -17,6 +17,7 @@ import {
 } from "../geometry";
 import { BRIGHTS, FOAM, LEAF, PAVEMENT, SHIRTS, WATER_LIGHT } from "../palette";
 import { bench, lamp, personLying, pine, roundTree } from "../prefabs";
+import { mulberry32 } from "../rng";
 import { type CrowdSpot, createCrowd } from "../sim/crowd";
 import { chamfer, Polyline, rectLoop } from "../sim/path";
 import type { BuildContext } from "./context";
@@ -1069,4 +1070,68 @@ export function buildPark(ctx: BuildContext): void {
 	buildExtras(ctx);
 	buildTrees(ctx);
 	buildCrowds(ctx);
+	buildFestival(ctx);
+}
+
+/** Simulation seconds a staged festival lasts. */
+const FESTIVAL_SECONDS = 60;
+const FESTIVAL_SEED = 0xf357;
+
+/**
+ * A festival crowd dancing around the bandstand, hidden until an agent stages
+ * `park_festival`. Its own generator keeps the rest of the city unchanged.
+ */
+function buildFestival(ctx: BuildContext): void {
+	const spots: CrowdSpot[] = [];
+	for (const [r, n] of [
+		[5.9, 14],
+		[7.1, 18],
+	] as const) {
+		for (let i = 0; i < n; i++) {
+			const a = (i / n) * Math.PI * 2 + r;
+			const x = BANDSTAND.x + Math.sin(a) * r;
+			const z = BANDSTAND.z + Math.cos(a) * r;
+			spots.push({ x, z, ry: Math.atan2(BANDSTAND.x - x, BANDSTAND.z - z) });
+		}
+	}
+	const crowd = createCrowd(ctx, spots, {
+		count: spots.length,
+		spread: 0.35,
+		cheer: true,
+		hidden: true,
+		rng: mulberry32(FESTIVAL_SEED),
+	});
+	if (!crowd) return;
+	const { events } = ctx;
+	events.landmark({
+		id: "park_bandstand",
+		name: "Bandstand in the central park",
+		x: BANDSTAND.x,
+		z: BANDSTAND.z,
+		radius: 8,
+	});
+	let endsAt = 0;
+	events.onStage("park_festival", (t) => {
+		if (crowd.visible)
+			return { ok: false, text: "A festival is already on in the park" };
+		crowd.setVisible(true);
+		endsAt = t + FESTIVAL_SECONDS;
+		const text =
+			"A pop-up festival fills the park: a crowd dances around the bandstand";
+		events.emit("festival_started", text, BANDSTAND.x, BANDSTAND.z);
+		return { ok: true, text };
+	});
+	ctx.agents.push({
+		update(_dt, t) {
+			if (!crowd.visible || t < endsAt) return;
+			crowd.setVisible(false);
+			events.emit(
+				"festival_ended",
+				"The park festival winds down and the crowd heads home",
+				BANDSTAND.x,
+				BANDSTAND.z,
+				t,
+			);
+		},
+	});
 }

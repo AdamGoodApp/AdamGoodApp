@@ -68,6 +68,9 @@ const DROPS_PER_JET = 22;
 const FIGHTER_COUNT = 8;
 /** Seconds for the fire to swell and ebb once. */
 const PULSE_PERIOD = 40;
+/** Extra intensity of a staged flare-up and how fast it fades (per second). */
+const FLARE_BOOST = 0.5;
+const FLARE_DECAY = 0.04;
 
 function roofHeight(site: FireSite, u: number): number {
 	const half = (site.w + ROOF_OVERHANG * 2) / 2;
@@ -430,9 +433,41 @@ function createFireAgent(
 	const target = new Vector3();
 	const pulseK = (Math.PI * 2) / PULSE_PERIOD;
 
+	// Agents can stage a flare-up; it fades back into the regular pulse.
+	let boost = 0;
+	let lastPulse = 0;
+	const { events } = ctx;
+	events.landmark({
+		id: "house_fire",
+		name: "Burning house (fire crews on scene)",
+		x: site.x,
+		z: site.z,
+		radius: Math.max(site.w, site.d) * 0.8,
+	});
+	events.onStage("fire_flare_up", () => {
+		boost = FLARE_BOOST;
+		const text =
+			"Flames suddenly leap from the burning house; the crews turn their hoses on it";
+		events.emit("fire_flare_up", text, site.x, site.z);
+		return { ok: true, text };
+	});
+
 	return {
-		update(_dt, t) {
-			const intensity = 0.62 + 0.38 * Math.sin(t * pulseK);
+		update(dt, t) {
+			const pulse = Math.sin(t * pulseK);
+			// The regular pulse peaking is news too.
+			if (pulse > 0.98 && lastPulse <= 0.98) {
+				events.emit(
+					"fire_flare_up",
+					"The house fire in the suburbs flares up again",
+					site.x,
+					site.z,
+					t,
+				);
+			}
+			lastPulse = pulse;
+			boost = Math.max(0, boost - dt * FLARE_DECAY);
+			const intensity = 0.62 + 0.38 * pulse + boost;
 
 			flames.forEach((f, i) => {
 				const lvl = MathUtils.clamp((intensity - f.threshold) / 0.35, 0, 1);

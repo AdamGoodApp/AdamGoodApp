@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
+import { CityEvents } from "#/city/events";
 import { INITIAL_UI, setUi, uiStore } from "#/store/ui";
 import { CLIENT_TOOLS, NO_CITY } from "./client-tools";
 import type { CityControls, CityToolContext } from "./context";
@@ -8,6 +9,9 @@ interface FakeWorld extends CityControls {
 	focusZone: Mock<CityControls["focusZone"]>;
 	setPaused: Mock<CityControls["setPaused"]>;
 	setSpeed: Mock<CityControls["setSpeed"]>;
+	highlightSpot: Mock<CityControls["highlightSpot"]>;
+	clearSpot: Mock<CityControls["clearSpot"]>;
+	log: CityEvents;
 }
 
 interface FakeContext extends CityToolContext {
@@ -16,15 +20,35 @@ interface FakeContext extends CityToolContext {
 }
 
 function fakeWorld(): FakeWorld {
+	const log = new CityEvents();
+	log.landmark({ id: "helipad", name: "Helipad", x: 40, z: -40, radius: 6 });
+	log.onStage("park_festival", () => {
+		log.emit("festival_started", "Party in {where}", 0, 0);
+		return { ok: true, text: "Party" };
+	});
 	return {
+		log,
 		focusZone: vi.fn(),
-		setView: vi.fn(),
+		setView: (v) => ({ x: v.x ?? 0, z: v.z ?? 0, zoom: v.zoom ?? 1 }),
 		resetView: vi.fn(),
 		setPaused: vi.fn(),
 		setSpeed: vi.fn(),
 		zoneScreenPoint: () => ({ x: 10, y: 20 }),
 		getView: () => ({ x: 0, z: 0, zoom: 1 }),
 		getSimulation: () => ({ paused: false, speed: 2, simTime: 0, agents: 3 }),
+		getEvents: (since, limit) => ({
+			events: log.since(since, limit),
+			lastId: log.lastId,
+		}),
+		landmarks: () => log.landmarks(),
+		stageKinds: () => log.stageKinds(),
+		stageEvent: (kind) => log.stage(kind),
+		highlightSpot: vi.fn(
+			(target: Parameters<CityControls["highlightSpot"]>[0]) =>
+				!("landmark" in target) ||
+				log.getLandmark(target.landmark) !== undefined,
+		),
+		clearSpot: vi.fn(),
 	};
 }
 
@@ -183,6 +207,52 @@ describe("city tools", () => {
 		} finally {
 			vi.useRealTimers();
 		}
+	});
+
+	it("stage_event runs a stage and get_city_events pages the log", async () => {
+		const world = fakeWorld();
+		const ctx = makeContext(world);
+		expect(await run("stage_event", { kind: "park_festival" }, ctx)).toEqual({
+			ok: true,
+			text: "Party",
+		});
+		const feed = await run("get_city_events", {}, ctx);
+		expect(feed).toMatchObject({
+			ok: true,
+			lastId: 1,
+			stages: ["park_festival"],
+			events: [{ kind: "festival_started", text: "Party in the city" }],
+		});
+		const newer = await run("get_city_events", { since: 1 }, ctx);
+		expect(newer.events).toEqual([]);
+		expect(
+			await run("stage_event", { kind: "launch_helicopter" }, ctx),
+		).toMatchObject({
+			ok: false,
+		});
+	});
+
+	it("highlight_spot rings a landmark or a point, and clears", async () => {
+		const world = fakeWorld();
+		const ctx = makeContext(world);
+		expect(await run("highlight_spot", { landmark: "helipad" }, ctx)).toEqual({
+			ok: true,
+		});
+		expect(world.highlightSpot).toHaveBeenLastCalledWith(
+			{ landmark: "helipad" },
+			8,
+		);
+		expect((await run("highlight_spot", { landmark: "moon" }, ctx)).ok).toBe(
+			false,
+		);
+		await run("highlight_spot", { x: 5, z: 6, radius: 10, seconds: 0 }, ctx);
+		expect(world.highlightSpot).toHaveBeenLastCalledWith(
+			{ x: 5, z: 6, radius: 10 },
+			0,
+		);
+		expect((await run("highlight_spot", { x: 5 }, ctx)).ok).toBe(false);
+		await run("highlight_spot", {}, ctx);
+		expect(world.clearSpot).toHaveBeenCalled();
 	});
 
 	it("keeps a tour under the 60 s client timeout", async () => {

@@ -5,12 +5,14 @@ import { ZONE_BY_ID, type ZoneId } from "#/data/zones";
 import type { CameraMode } from "./camera";
 import { IsoCamera } from "./camera";
 import { DayNight, simClock, skyBottom, skyTop, type TimeMode } from "./env";
+import type { CityEvent, Landmark, StageKind, StageResult } from "./events";
 import { ZoneHighlights } from "./highlight";
 import { PointerController } from "./input";
 import { createPipeline } from "./post";
 import { createRenderer, type GpuTier } from "./renderer";
 import { mulberry32, WORLD_SEED } from "./rng";
 import type { Agent } from "./sim/agent";
+import { SpotHighlight } from "./spot";
 import { type BuiltWorld, buildWorld } from "./world/index";
 
 export interface CityWorldOptions {
@@ -74,6 +76,7 @@ export class CityWorld {
 	private readonly scene = new Scene();
 	private readonly camera: IsoCamera;
 	private readonly highlights: ZoneHighlights;
+	private readonly spot: SpotHighlight;
 	private readonly input: PointerController;
 	private readonly built: BuiltWorld;
 	private readonly agents: Agent[];
@@ -143,6 +146,7 @@ export class CityWorld {
 			lite: o.lite,
 		});
 		this.highlights = new ZoneHighlights(this.scene);
+		this.spot = new SpotHighlight(this.scene);
 
 		this.built = buildWorld(mulberry32(WORLD_SEED), o.density);
 		this.scene.add(this.built.group);
@@ -196,6 +200,7 @@ export class CityWorld {
 			const maxSteps = Math.ceil(STEPS_PER_FRAME * this.speed);
 			let steps = 0;
 			while (this.acc >= STEP && steps < maxSteps) {
+				this.built.events.now = this.simTime;
 				for (const a of this.agents) a.update(STEP, this.simTime);
 				this.simTime += STEP;
 				this.acc -= STEP;
@@ -204,9 +209,12 @@ export class CityWorld {
 			if (steps === maxSteps) this.acc = 0;
 		}
 		simClock.value = this.simTime;
+		this.built.events.now = this.simTime;
 
 		const lighting = this.dayNight.update(dt * this.speed, !this.paused);
-		const animating = this.highlights.update(dt, this.reducedMotion);
+		const ringAnimating = this.highlights.update(dt, this.reducedMotion);
+		const spotAnimating = this.spot.update(dt, this.reducedMotion);
+		const animating = ringAnimating || spotAnimating;
 		if (
 			this.paused &&
 			!this.dirty &&
@@ -322,9 +330,16 @@ export class CityWorld {
 		this.flyTo(0, 0, this.mode === "pannable" ? 2.4 : 1);
 	}
 
-	setView(view: Partial<CityView>): void {
+	/** Flies to the merged view and returns it (the camera may clamp it on arrival). */
+	setView(view: Partial<CityView>): CityView {
 		const now = this.camera.view;
-		this.flyTo(view.x ?? now.x, view.z ?? now.z, view.zoom ?? now.zoom);
+		const target = {
+			x: view.x ?? now.x,
+			z: view.z ?? now.z,
+			zoom: view.zoom ?? now.zoom,
+		};
+		this.flyTo(target.x, target.z, target.zoom);
+		return target;
 	}
 
 	getView(): CityView {
@@ -352,6 +367,53 @@ export class CityWorld {
 		return this.hovered;
 	}
 
+	/** Simulation events after `since` (an event id), oldest first. */
+	getEvents(since = 0, limit = 64): { events: CityEvent[]; lastId: number } {
+		const log = this.built.events;
+		return { events: log.since(since, limit), lastId: log.lastId };
+	}
+
+	landmarks(): Landmark[] {
+		return this.built.events.landmarks();
+	}
+
+	stageKinds(): StageKind[] {
+		return this.built.events.stageKinds();
+	}
+
+	stageEvent(kind: StageKind): StageResult {
+		const result = this.built.events.stage(kind);
+		this.dirty = true;
+		if (result.ok && this.paused) {
+			return {
+				ok: true,
+				text: `${result.text} (the simulation is paused; it plays out once it resumes)`,
+			};
+		}
+		return result;
+	}
+
+	/** Ring a ground point or a landmark (by id) for `seconds` (0 = until cleared). */
+	highlightSpot(
+		target: { x: number; z: number; radius?: number } | { landmark: string },
+		seconds: number,
+	): boolean {
+		let spot: { x: number; z: number; radius: number };
+		if ("landmark" in target) {
+			const mark = this.built.events.getLandmark(target.landmark);
+			if (!mark) return false;
+			spot = mark;
+		} else spot = { radius: 6, ...target };
+		this.spot.show(spot.x, spot.z, spot.radius, seconds);
+		this.dirty = true;
+		return true;
+	}
+
+	clearSpot(): void {
+		this.spot.clear();
+		this.dirty = true;
+	}
+
 	setTimeMode(mode: TimeMode): void {
 		this.dayNight.setMode(mode);
 		this.dirty = true;
@@ -374,6 +436,7 @@ export class CityWorld {
 		this.input.dispose();
 		this.o.canvas.removeEventListener("webglcontextlost", this.onContextLost);
 		this.highlights.dispose();
+		this.spot.dispose();
 		this.built.dispose();
 		this.pipeline.dispose();
 		this.renderer.dispose();

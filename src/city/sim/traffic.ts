@@ -1,4 +1,5 @@
 import { Vector3 } from "three";
+import type { CityEvents } from "../events";
 import { MAT_INSTANCED } from "../geometry";
 import { CARS } from "../palette";
 import { ambulance, bus, car, fireTruck, policeCar, tram } from "../prefabs";
@@ -52,6 +53,8 @@ const SPAWN_GAP = 8;
 const JUNCTION_CLEAR = 9;
 const BUS_SPEED = 9;
 const BUS_DWELL = 3;
+/** Minimum simulation seconds between logged bus arrivals. */
+const BUS_EVENT_GAP = 20;
 const BUS_COMFORT_DECEL = 3;
 const BUS_TINTS = [0xf2c94c, 0x3b7dd8] as const;
 /** A vehicle held up this long ignores junction rights briefly so a gridlock always dissolves. */
@@ -214,13 +217,25 @@ function follow(a: Vehicle, b: Vehicle, dist: number): number {
 
 class RoadTraffic implements Agent {
 	private readonly scratch = new Vector3();
+	/** Simulation time of the last bus event; buses would otherwise flood the log. */
+	private lastBusEvent = Number.NEGATIVE_INFINITY;
 
 	constructor(
 		private readonly vehicles: readonly Vehicle[],
 		private readonly pools: readonly Pool[],
 		private readonly junctions: JunctionControl,
 		private readonly rnd: Rng,
-	) {}
+		private readonly events: CityEvents,
+	) {
+		const truck = vehicles.find((v) => v.sortie);
+		events.onStage("dispatch_fire_engine", () => {
+			if (!truck?.sortie) return { ok: false, text: "There is no fire engine" };
+			if (truck.active)
+				return { ok: false, text: "The fire engine is already out on a run" };
+			truck.sortie.wait = 0;
+			return { ok: true, text: "The fire station sends its engine out" };
+		});
+	}
 
 	update(dt: number): void {
 		this.junctions.update(this.vehicles, dt);
@@ -264,6 +279,12 @@ class RoadTraffic implements Agent {
 		a.active = true;
 		a.refresh();
 		a.yaw = Math.atan2(a.dir.x, a.dir.z);
+		this.events.emit(
+			"fire_engine_dispatched",
+			"A fire engine races out, sirens on, through {where}",
+			a.pos.x,
+			a.pos.z,
+		);
 	}
 
 	private drive(a: Vehicle, dt: number): void {
@@ -298,6 +319,16 @@ class RoadTraffic implements Agent {
 			a.v = 0;
 			a.dwell = BUS_DWELL;
 			a.stops.advance();
+			const now = this.events.now;
+			if (now - this.lastBusEvent >= BUS_EVENT_GAP) {
+				this.lastBusEvent = now;
+				this.events.emit(
+					"bus_at_stop",
+					"A city bus pulls in at a stop in {where}",
+					a.pos.x,
+					a.pos.z,
+				);
+			}
 		} else a.s += ds;
 
 		const sortie = a.sortie;
@@ -308,6 +339,12 @@ class RoadTraffic implements Agent {
 				a.v = 0;
 				a.pool.hide(a.index);
 				sortie.wait = this.rnd.range(sortie.waitRange[0], sortie.waitRange[1]);
+				this.events.emit(
+					"fire_engine_returned",
+					"The fire engine is back at the station",
+					a.pos.x,
+					a.pos.z,
+				);
 			}
 		}
 	}
@@ -558,7 +595,13 @@ export function createTraffic(ctx: BuildContext): void {
 	] as const;
 	ctx.group.add(...pools.map((p) => p.mesh));
 	ctx.agents.push(
-		new RoadTraffic(vehicles, pools, new JunctionControl(CAR_LOOPS), rnd),
+		new RoadTraffic(
+			vehicles,
+			pools,
+			new JunctionControl(CAR_LOOPS),
+			rnd,
+			ctx.events,
+		),
 	);
 
 	if (scaled(1, ctx.density) > 0) {

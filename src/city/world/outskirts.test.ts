@@ -1,5 +1,6 @@
 import { type BufferGeometry, Group } from "three";
 import { describe, expect, it } from "vitest";
+import { CityEvents } from "../events";
 import { mulberry32 } from "../rng";
 import type { BuildContext } from "./context";
 import { isSea, LAND_HALF } from "./layout";
@@ -16,6 +17,7 @@ function context(): BuildContext {
 		facades: [],
 		group: new Group(),
 		agents: [],
+		events: new CityEvents(),
 		sidewalks: [],
 		residentialDoors: [],
 		residentialLoop: null,

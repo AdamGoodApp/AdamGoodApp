@@ -1,5 +1,6 @@
 import { Group, InstancedMesh, Matrix4 } from "three";
 import { describe, expect, it } from "vitest";
+import { CityEvents } from "../events";
 import { mulberry32 } from "../rng";
 import type { BuildContext } from "../world/context";
 import { createTraffic } from "./traffic";
@@ -28,6 +29,7 @@ function makeContext(density: number, seed: number): BuildContext {
 		facades: [],
 		group: new Group(),
 		agents: [],
+		events: new CityEvents(),
 		sidewalks: [],
 		residentialDoors: [],
 		residentialLoop: null,
@@ -171,5 +173,24 @@ describe("road traffic", () => {
 			(c): c is InstancedMesh => c instanceof InstancedMesh,
 		)[4];
 		expect(cars?.count).toBe(110);
+	});
+
+	it("dispatches the fire engine on demand and logs the run", () => {
+		const ctx = makeContext(1, 0xada2026);
+		createTraffic(ctx);
+		const { events } = ctx;
+		const step = (seconds: number) => {
+			for (let i = 0; i < seconds * 60; i++) {
+				events.now += 1 / 60;
+				for (const a of ctx.agents) a.update(1 / 60, events.now);
+			}
+		};
+		step(1);
+		expect(events.stage("dispatch_fire_engine").ok).toBe(true);
+		step(2);
+		expect(events.since().map((e) => e.kind)).toContain(
+			"fire_engine_dispatched",
+		);
+		expect(events.stage("dispatch_fire_engine")).toMatchObject({ ok: false });
 	});
 });

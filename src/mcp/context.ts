@@ -10,8 +10,14 @@ export type CityControls = Pick<
 	| "getView"
 	| "setPaused"
 	| "setSpeed"
-	| "getSimulation"
 	| "zoneScreenPoint"
+	| "getEvents"
+	| "landmarks"
+	| "stageKinds"
+	| "stageEvent"
+	| "highlightSpot"
+	| "clearSpot"
+	| "getSimulation"
 >;
 
 /** What the in-page tools need from the running page. */

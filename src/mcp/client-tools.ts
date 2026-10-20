@@ -6,16 +6,20 @@ import { DATA_TOOL_BODIES } from "./data-tools";
 import {
 	closeDistrict,
 	controlSimulation,
+	DEFAULT_EVENT_LIMIT,
 	DEFAULT_FOCUS_ZOOM,
 	DEFAULT_MESSAGE_SECONDS,
+	DEFAULT_SPOT_SECONDS,
 	DEFAULT_TOUR_SECONDS,
 	focusDistrict,
+	getCityEvents,
 	getCityState,
 	getContact,
 	getDistrictContent,
 	getProfile,
 	getSiteGuide,
 	highlightDistrict,
+	highlightSpot,
 	listDistricts,
 	listExperience,
 	listProjects,
@@ -27,6 +31,7 @@ import {
 	setTimeOfDay,
 	setView,
 	showMessage,
+	stageEvent,
 	TOOL_META,
 } from "./definitions";
 
@@ -118,8 +123,7 @@ export const CLIENT_TOOLS = [
 	setView.client<CityToolContext>((input, ctx) => {
 		const w = world(ctx);
 		if (!w) return noCity;
-		w.setView(input);
-		return { ok: true, view: w.getView() };
+		return { ok: true, view: w.setView(input) };
 	}),
 
 	resetView.client<CityToolContext>((_input, ctx) => {
@@ -206,6 +210,53 @@ export const CLIENT_TOOLS = [
 			? { ok: true, stops: done, aborted: true }
 			: { ok: true, stops: done };
 	}),
+
+	getCityEvents.client<CityToolContext>(({ since, limit }, ctx) => {
+		const w = world(ctx);
+		if (!w) return noCity;
+		const { events, lastId } = w.getEvents(
+			since ?? 0,
+			limit ?? DEFAULT_EVENT_LIMIT,
+		);
+		return {
+			ok: true,
+			lastId,
+			simTime: w.getSimulation().simTime,
+			events,
+			landmarks: w.landmarks(),
+			stages: w.stageKinds(),
+		};
+	}),
+
+	stageEvent.client<CityToolContext>(({ kind }, ctx) => {
+		const w = world(ctx);
+		if (!w) return noCity;
+		const result = w.stageEvent(kind);
+		return result.ok
+			? { ok: true, text: result.text }
+			: { ok: false, error: result.text };
+	}),
+
+	highlightSpot.client<CityToolContext>(
+		({ landmark, x, z, radius, seconds }, ctx) => {
+			const w = world(ctx);
+			if (!w) return noCity;
+			const time = seconds ?? DEFAULT_SPOT_SECONDS;
+			if (landmark !== undefined) {
+				return w.highlightSpot({ landmark }, time)
+					? { ok: true }
+					: { ok: false, error: `Unknown landmark: ${landmark}` };
+			}
+			if (x !== undefined && z !== undefined) {
+				w.highlightSpot({ x, z, ...(radius ? { radius } : {}) }, time);
+				return { ok: true };
+			}
+			if (x !== undefined || z !== undefined)
+				return { ok: false, error: "Give both x and z, or a landmark" };
+			w.clearSpot();
+			return { ok: true };
+		},
+	),
 
 	getProfile.client<CityToolContext>(DATA_TOOL_BODIES.get_profile),
 	listDistricts.client<CityToolContext>(DATA_TOOL_BODIES.list_districts),

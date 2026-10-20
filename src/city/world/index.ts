@@ -1,4 +1,5 @@
 import { Group, Material, Mesh, Texture } from "three";
+import { CityEvents } from "../events";
 import { MAT_STATIC, merge } from "../geometry";
 import { facadeMaterial } from "../kit/facade";
 import type { Rng } from "../rng";
@@ -30,6 +31,7 @@ import { buildThemePark } from "./themepark";
 export interface BuiltWorld {
 	group: Group;
 	agents: Agent[];
+	events: CityEvents;
 	dispose(): void;
 }
 
@@ -42,6 +44,7 @@ export function buildWorld(rng: Rng, density: number): BuiltWorld {
 		facades: [],
 		group,
 		agents: [],
+		events: new CityEvents(),
 		sidewalks: [],
 		residentialDoors: [],
 		residentialLoop: null,
@@ -88,6 +91,7 @@ export function buildWorld(rng: Rng, density: number): BuiltWorld {
 	return {
 		group,
 		agents: ctx.agents,
+		events: ctx.events,
 		dispose() {
 			group.traverse((o) => {
 				if (o instanceof Mesh) {

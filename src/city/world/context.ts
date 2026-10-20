@@ -1,4 +1,5 @@
 import type { BufferGeometry, Group, Vector3 } from "three";
+import type { CityEvents } from "../events";
 import type { Rng } from "../rng";
 import type { Agent } from "../sim/agent";
 import type { Polyline } from "../sim/path";
@@ -19,6 +20,8 @@ export interface BuildContext {
 	/** Scene objects that are not part of the static merge (pools, textured meshes, ocean). */
 	readonly group: Group;
 	readonly agents: Agent[];
+	/** Event log, stageable events and landmarks the agent tools read. */
+	readonly events: CityEvents;
 	/** Pedestrian network: open polylines; endpoints within 2 m are connected. */
 	readonly sidewalks: Polyline[];
 	/** Door positions residents walk out of. */

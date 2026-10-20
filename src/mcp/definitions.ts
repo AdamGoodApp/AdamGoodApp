@@ -1,5 +1,6 @@
 import { toolDefinition } from "@tanstack/ai";
 import { z } from "zod";
+import { CITY_EVENT_KINDS, STAGE_KINDS } from "#/city/events";
 import {
 	DISTRICT_GUIDE,
 	districtId,
@@ -26,6 +27,8 @@ export const DEFAULT_FOCUS_ZOOM = 2.2;
 export const DEFAULT_MESSAGE_SECONDS = 8;
 export const DEFAULT_TOUR_SECONDS = 5;
 export const DEFAULT_SEARCH_LIMIT = 5;
+export const DEFAULT_SPOT_SECONDS = 8;
+export const DEFAULT_EVENT_LIMIT = 20;
 
 const zoom = z.number().min(1).max(3.5);
 const empty = z.object({});
@@ -179,6 +182,80 @@ export const runTour = toolDefinition({
 	}),
 });
 
+// Simulation events: a news feed of what the city is doing, and staged happenings.
+
+export const getCityEvents = toolDefinition({
+	name: "get_city_events",
+	description:
+		"Read what the simulation has been doing (fire flare-ups, fire engine runs, bus arrivals, helicopter flights, festivals) for a news ticker or narration, plus named landmarks and the events that can be staged. Pass the returned lastId as `since` to get only newer events.",
+	inputSchema: z.object({
+		since: z
+			.number()
+			.int()
+			.min(0)
+			.default(0)
+			.describe("Only events with a larger id"),
+		limit: z.number().int().min(1).max(64).default(20),
+	}),
+	outputSchema: okResult.extend({
+		lastId: z.number().optional(),
+		simTime: z.number().optional(),
+		events: z
+			.array(
+				z.object({
+					id: z.number(),
+					t: z.number().describe("Simulation time, seconds"),
+					kind: z.enum(CITY_EVENT_KINDS),
+					zone: districtId.nullable(),
+					text: z.string(),
+					x: z.number(),
+					z: z.number(),
+				}),
+			)
+			.optional(),
+		landmarks: z
+			.array(
+				z.object({
+					id: z.string(),
+					name: z.string(),
+					zone: districtId.nullable(),
+					x: z.number(),
+					z: z.number(),
+					radius: z.number(),
+				}),
+			)
+			.optional(),
+		stages: z.array(z.enum(STAGE_KINDS)).optional(),
+	}),
+});
+
+export const stageEvent = toolDefinition({
+	name: "stage_event",
+	description:
+		"Make something happen in the city: fire_flare_up (the suburban house fire flares up), dispatch_fire_engine (the fire engine runs a lap with sirens), launch_helicopter (the medical helicopter takes off from the hospital), park_festival (a dancing crowd fills the central park for a minute).",
+	inputSchema: z.object({ kind: z.enum(STAGE_KINDS) }),
+	outputSchema: okResult.extend({ text: z.string().optional() }),
+});
+
+export const highlightSpot = toolDefinition({
+	name: "highlight_spot",
+	description:
+		"Draw a pulsing ring around one spot in the city: a landmark id from get_city_events, or a ground point (x/z in world units, e.g. an event's position). Call with neither to clear it.",
+	inputSchema: z.object({
+		landmark: z.string().min(1).max(64).optional(),
+		x: z.number().min(-250).max(250).optional(),
+		z: z.number().min(-250).max(250).optional(),
+		radius: z.number().min(2).max(40).optional().describe("Metres; default 6"),
+		seconds: z
+			.number()
+			.min(0)
+			.max(60)
+			.default(DEFAULT_SPOT_SECONDS)
+			.describe("0 keeps it until cleared"),
+	}),
+	outputSchema: okResult,
+});
+
 // CV data: answered in the page and by the remote MCP server.
 
 export const getProfile = toolDefinition({
@@ -269,6 +346,9 @@ export const CITY_TOOLS = [
 	controlSimulation,
 	showMessage,
 	runTour,
+	getCityEvents,
+	stageEvent,
+	highlightSpot,
 ] as const;
 
 export const DATA_TOOLS = [
@@ -326,6 +406,9 @@ export const TOOL_META: Record<ToolName, ToolMeta> = {
 	},
 	show_message: { title: "Show a message", readOnly: false, widget: false },
 	run_tour: { title: "Run a guided tour", readOnly: false, widget: false },
+	get_city_events: { title: "City news feed", readOnly: true, widget: false },
+	stage_event: { title: "Stage a city event", readOnly: false, widget: false },
+	highlight_spot: { title: "Highlight a spot", readOnly: false, widget: false },
 	get_profile: { title: "Adam's profile", readOnly: true, widget: true },
 	list_districts: { title: "List districts", readOnly: true, widget: false },
 	get_district_content: { title: "CV chapter", readOnly: true, widget: true },

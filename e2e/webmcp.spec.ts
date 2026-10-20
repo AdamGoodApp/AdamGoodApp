@@ -15,6 +15,9 @@ const TOOLS = [
 	"control_simulation",
 	"show_message",
 	"run_tour",
+	"get_city_events",
+	"stage_event",
+	"highlight_spot",
 	"get_profile",
 	"list_districts",
 	"get_district_content",
@@ -95,6 +98,30 @@ test("the city registers its WebMCP tools and agents can drive it", async ({
 	await expect(notice).toContainText("Hello from MCP");
 	await page.getByRole("button", { name: "Dismiss" }).click();
 	await expect(notice).toBeHidden();
+
+	const feed = await executeTool(page, "get_city_events", {});
+	expect(feed.stages).toEqual(
+		expect.arrayContaining([
+			"fire_flare_up",
+			"dispatch_fire_engine",
+			"launch_helicopter",
+			"park_festival",
+		]),
+	);
+	expect(
+		await executeTool(page, "stage_event", { kind: "park_festival" }),
+	).toMatchObject({ ok: true });
+	const after = await executeTool(page, "get_city_events", {
+		since: Number(feed.lastId),
+	});
+	expect(after.events).toEqual(
+		expect.arrayContaining([
+			expect.objectContaining({ kind: "festival_started" }),
+		]),
+	);
+	expect(
+		await executeTool(page, "highlight_spot", { landmark: "park_bandstand" }),
+	).toEqual({ ok: true });
 
 	const profile = await executeTool(page, "get_profile", {});
 	expect(profile).toMatchObject({ kind: "profile", name: "Adam Rais" });
