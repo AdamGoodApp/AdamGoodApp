@@ -1,6 +1,8 @@
 import type { z } from "zod";
 import {
+	keywordRank,
 	MAX_SEARCH_LIMIT,
+	type RankedDocument,
 	SEARCH_DOCUMENTS,
 	type SearchDocument,
 	type SearchHit,
@@ -116,11 +118,43 @@ async function indexReady(index: VectorIndexBinding): Promise<boolean> {
 }
 
 /**
- * search_cv on the server: semantic search over the CV with Workers AI
- * embeddings and Vectorize, so "video streaming" finds U-NEXT without the
- * exact words. Falls back to keyword search when the bindings are missing
- * (tests, local preview), while this build's CV is still being indexed, or
- * when the semantic search fails.
+ * bge-v1.5's retrieval instruction for short queries; documents are embedded
+ * without it.
+ */
+const QUERY_INSTRUCTION =
+	"Represent this sentence for searching relevant passages: ";
+/** Candidates taken from each ranking before fusing. */
+const CANDIDATES = MAX_SEARCH_LIMIT;
+/** The usual reciprocal rank fusion constant. */
+const RRF_K = 60;
+
+/**
+ * Reciprocal rank fusion: a document scores 1/(k + rank) in each ranking it
+ * appears in. Scores are scaled so a document ranked first by both is 1.
+ */
+function fuse(rankings: readonly (readonly number[])[]): RankedDocument[] {
+	const scores = new Map<number, number>();
+	for (const ranking of rankings) {
+		ranking.forEach((index, rank) => {
+			scores.set(index, (scores.get(index) ?? 0) + 1 / (RRF_K + rank + 1));
+		});
+	}
+	const best = rankings.length / (RRF_K + 1);
+	return [...scores]
+		.map(([index, score]) => ({
+			index,
+			score: Math.round((score / best) * 1000) / 1000,
+		}))
+		.sort((a, b) => b.score - a.score || a.index - b.index);
+}
+
+/**
+ * search_cv on the server: hybrid search over the CV. Workers AI embeddings
+ * in Vectorize find matches by meaning ("leading a team" finds "directed a
+ * team of 8"); keyword ranking keeps exact names and terms on top; reciprocal
+ * rank fusion merges the two. Falls back to keyword search alone when the
+ * bindings are missing (CI, local preview without credentials), while this
+ * build's CV is still being indexed, or when the semantic side fails.
  */
 export function createCvSearch(env: SemanticSearchEnv): CvSearch {
 	const gateway = env.AI_GATEWAY_ID ? { id: env.AI_GATEWAY_ID } : undefined;
@@ -148,27 +182,38 @@ export function createCvSearch(env: SemanticSearchEnv): CvSearch {
 			const [vector] = (
 				await AI.run(
 					EMBEDDING_MODEL,
-					{ text: [query] },
+					{ text: [QUERY_INSTRUCTION + query] },
 					gateway ? { gateway } : undefined,
 				)
 			).data;
 			if (!vector) return keyword();
 			const { matches } = await CV_INDEX.query(vector, {
-				topK,
+				topK: CANDIDATES,
 				namespace: CV_INDEX_NAMESPACE,
 			});
 			const prefix = `${CV_INDEX_NAMESPACE}-`;
-			const results: SearchHit[] = [];
-			for (const match of matches) {
-				const doc = match.id.startsWith(prefix)
-					? SEARCH_DOCUMENTS[Number(match.id.slice(prefix.length))]
-					: undefined;
-				if (doc)
-					results.push(searchHit(doc, Math.round(match.score * 1000) / 1000));
-			}
-			return results.length > 0
-				? { kind: "search" as const, query, mode: "semantic" as const, results }
-				: keyword();
+			const semantic = matches.flatMap((m) => {
+				const index = Number(m.id.slice(prefix.length));
+				return m.id.startsWith(prefix) && SEARCH_DOCUMENTS[index]
+					? [index]
+					: [];
+			});
+			if (semantic.length === 0) return keyword();
+			const lexical = keywordRank(query)
+				.slice(0, CANDIDATES)
+				.map((r) => r.index);
+			const results: SearchHit[] = fuse([semantic, lexical])
+				.slice(0, topK)
+				.flatMap(({ index, score }) => {
+					const doc = SEARCH_DOCUMENTS[index];
+					return doc ? [searchHit(doc, score)] : [];
+				});
+			return {
+				kind: "search" as const,
+				query,
+				mode: "hybrid" as const,
+				results,
+			};
 		} catch (e) {
 			console.error("[search_cv] semantic search failed", e);
 			return keyword();

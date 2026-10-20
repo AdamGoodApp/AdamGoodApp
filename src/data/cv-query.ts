@@ -254,8 +254,17 @@ export function searchHit(doc: SearchDocument, score: number): SearchHit {
 	};
 }
 
-/** Keyword search: a point per matched term, plus one when every term matches. */
-export function searchCv(query: string, limit = 5): SearchHit[] {
+/** A document's position in SEARCH_DOCUMENTS and its score. */
+export interface RankedDocument {
+	index: number;
+	score: number;
+}
+
+/**
+ * Keyword ranking of SEARCH_DOCUMENTS: a point per matched term, plus one when
+ * every term matches; ties keep document order.
+ */
+export function keywordRank(query: string): RankedDocument[] {
 	const terms = [
 		...new Set(
 			query
@@ -265,21 +274,28 @@ export function searchCv(query: string, limit = 5): SearchHit[] {
 		),
 	];
 	if (terms.length === 0) return [];
-	const hits: { doc: SearchDocument; score: number; order: number }[] = [];
-	SEARCH_DOCUMENTS.forEach((doc, order) => {
+	const ranked: RankedDocument[] = [];
+	SEARCH_DOCUMENTS.forEach((doc, index) => {
 		const haystack = doc.text.toLowerCase();
 		const matched = terms.filter((t) => haystack.includes(t)).length;
-		if (matched === 0) return;
-		hits.push({
-			doc,
-			score: matched + (matched === terms.length ? 1 : 0),
-			order,
-		});
+		if (matched > 0) {
+			ranked.push({
+				index,
+				score: matched + (matched === terms.length ? 1 : 0),
+			});
+		}
 	});
-	hits.sort((a, b) => b.score - a.score || a.order - b.order);
-	return hits
+	return ranked.sort((a, b) => b.score - a.score || a.index - b.index);
+}
+
+/** Keyword search over the CV. */
+export function searchCv(query: string, limit = 5): SearchHit[] {
+	return keywordRank(query)
 		.slice(0, Math.max(0, Math.min(limit, MAX_SEARCH_LIMIT)))
-		.map((h) => searchHit(h.doc, h.score));
+		.flatMap(({ index, score }) => {
+			const doc = SEARCH_DOCUMENTS[index];
+			return doc ? [searchHit(doc, score)] : [];
+		});
 }
 
 export function experience(): { roles: Role[]; education: string[] } {

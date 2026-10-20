@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { SEARCH_DOCUMENTS } from "#/data/cv-query";
+import { keywordRank, SEARCH_DOCUMENTS } from "#/data/cv-query";
 import type { EmbeddingsBinding, VectorIndexBinding } from "./semantic-search";
 import * as mod from "./semantic-search";
 
@@ -65,26 +65,35 @@ describe("createCvSearch", () => {
 		expect(index.query).not.toHaveBeenCalled();
 	});
 
-	it("maps vector matches back to CV units and drops ids from other namespaces", async () => {
+	it("fuses vector and keyword rankings and drops ids from other namespaces", async () => {
 		const ns = mod.CV_INDEX_NAMESPACE;
+		const [shaka] = keywordRank("Shaka");
+		const semanticOnly = 0;
+		expect(shaka).toBeDefined();
+		expect(keywordRank("Shaka").some((r) => r.index === semanticOnly)).toBe(
+			false,
+		);
 		const index = fakeIndex(allIds(), [
-			{ id: `${ns}-3`, score: 0.81234 },
-			{ id: "cv-0000dead-1", score: 0.8 },
-			{ id: `${ns}-0`, score: 0.7 },
+			{ id: `${ns}-${semanticOnly}`, score: 0.7 },
+			{ id: "cv-0000dead-1", score: 0.69 },
+			{ id: `${ns}-${shaka?.index}`, score: 0.6 },
 		]);
-		const out = await mod.createCvSearch({ AI: fakeAi(), CV_INDEX: index })({
-			query: "video streaming",
-			limit: 3,
+		const ai = fakeAi();
+		const out = await mod.createCvSearch({ AI: ai, CV_INDEX: index })({
+			query: "Shaka",
+			limit: 2,
 		});
 
+		expect(ai.calls.at(-1)?.[0]).toMatch(/^Represent this sentence.*Shaka$/);
 		expect(index.query).toHaveBeenCalledWith(expect.any(Array), {
-			topK: 3,
+			topK: 20,
 			namespace: ns,
 		});
-		expect(out.mode).toBe("semantic");
+		expect(out.mode).toBe("hybrid");
+		// Found by both rankings beats the vector search's own top hit.
 		expect(out.results.map((r) => [r.snippet, r.score])).toEqual([
-			[SEARCH_DOCUMENTS[3]?.text, 0.812],
-			[SEARCH_DOCUMENTS[0]?.text, 0.7],
+			[SEARCH_DOCUMENTS[shaka?.index ?? -1]?.text.slice(0, 240), 0.992],
+			[SEARCH_DOCUMENTS[semanticOnly]?.text.slice(0, 240), 0.5],
 		]);
 	});
 

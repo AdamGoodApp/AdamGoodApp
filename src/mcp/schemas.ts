@@ -98,8 +98,8 @@ export const districtResult = districtSummarySchema.extend({
 export const searchResult = z.object({
 	kind: z.literal("search"),
 	query: z.string(),
-	/** semantic: Workers AI embeddings + Vectorize; keyword: term matching. */
-	mode: z.enum(["semantic", "keyword"]),
+	/** hybrid: Workers AI embeddings + Vectorize fused with keyword ranking; keyword: term matching only. */
+	mode: z.enum(["hybrid", "keyword"]),
 	results: z.array(
 		z.object({
 			zoneId: districtId,
