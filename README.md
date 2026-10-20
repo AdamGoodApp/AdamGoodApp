@@ -41,6 +41,17 @@ My CV as a living, SimCity-style isometric city that fills the whole screen: sev
 
 ## AI agents (MCP)
 
+[![Claude answering "show me the relevant work history where Rust is used" through the AdamGoodApp MCP, with the 8-bit CV card rendered inline](public/mcp-demo.jpg)](https://adamgoodapp.com/mcp-demo.mp4)
+
+*26 s demo, recorded in claude.ai: Claude calls the AdamGoodApp connector, renders the CV card inline and answers from the real CV. [Watch the MP4](https://adamgoodapp.com/mcp-demo.mp4).*
+
+### Try it in Claude
+
+1. Claude → **Settings → Connectors → Add custom connector**, URL `https://adamgoodapp.com/mcp` (no login).
+2. Turn the connector on in a chat and ask, e.g. "Using AdamGoodApp mcp, show me the relevant work history where Rust is used."
+
+Claude Desktop without connectors: add `{"mcpServers":{"adamgoodapp":{"command":"npx","args":["-y","mcp-remote","https://adamgoodapp.com/mcp"]}}}` to `claude_desktop_config.json` (text answers only; no card).
+
 The site is callable by AI agents three ways, all built from one set of TanStack AI `toolDefinition`s (`src/mcp/definitions.ts`):
 
 - **Remote MCP server** at **`https://adamgoodapp.com/mcp`** (Streamable HTTP, stateless, no auth). Add it as a custom connector in Claude or ChatGPT, or point the MCP Inspector at it. Tools: `get_profile`, `list_districts`, `get_district_content`, `search_cv`, `list_experience`, `list_skills`, `list_projects`, `get_contact`, `get_site_guide`; resources `cv://profile` and `cv://sections/{district}` (markdown).
