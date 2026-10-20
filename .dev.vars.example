@@ -1,0 +1,2 @@
+# AI Gateway token (Run permission) for gateway "main"; the Anthropic key is stored in the gateway (BYOK).
+CF_AIG_TOKEN=

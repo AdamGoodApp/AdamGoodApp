@@ -20,6 +20,10 @@ export default defineConfig({
 			"@tanstack/ai-react",
 			"@mcp-b/global",
 			"zod",
+			"liquid-glass-react",
+			"react-markdown",
+			"remark-gfm",
+			"@shadcn/react/message-scroller",
 		],
 	},
 	plugins: [

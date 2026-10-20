@@ -13,6 +13,7 @@ import type { ZoneId } from "#/data/zones";
 import { isDesktopViewport, readParam } from "#/lib/device";
 import { setUi, uiStore } from "#/store/ui";
 import { CityCanvas } from "./CityCanvas";
+import { MayorChat } from "./chat/MayorChat";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { AgentNotice } from "./hud/AgentNotice";
 import { CvOutline } from "./hud/CvOutline";
@@ -103,6 +104,7 @@ export function CityPage() {
 							<TimeButton />
 							<HoverLabel />
 							<AgentNotice />
+							<MayorChat worldRef={worldRef} select={select} hover={hover} />
 							<NavButtons layout="corner" />
 							{isDesktop && selected && anchor && (
 								<ZoneCard zone={CV[selected]} anchor={anchor} onClose={close} />

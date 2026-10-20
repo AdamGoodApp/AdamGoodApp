@@ -34,7 +34,9 @@ export function NavButtons({ layout }: { layout: "corner" | "center" }) {
 			aria-label="Contact"
 			className={cn(
 				"flex gap-4",
-				corner ? "fixed right-5 bottom-5 z-20" : "flex-wrap justify-center",
+				corner
+					? "fixed right-5 bottom-[calc(var(--mayor-dock,0px)+1.25rem)] z-20 2xl:bottom-5"
+					: "flex-wrap justify-center",
 			)}
 		>
 			{ITEMS.map(({ label, name, href, Icon, external }) => (

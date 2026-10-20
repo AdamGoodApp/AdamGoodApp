@@ -62,16 +62,36 @@ curl -s https://adamgoodapp.com/mcp -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_profile","arguments":{}}}'
 ```
 
+## The Mayor (chat guide)
+
+A chat bar at the bottom of the city. Ask "the Mayor" about the CV and the city answers on screen:
+
+- **Answers and moves the camera.** Claude Haiku 5.5 gets the whole CV in its system prompt (`src/chat/system-prompt.ts`). The CV data tools run on the server, and calls to the city tools stream to the browser, which runs them against the live city (focus or open a district, highlight a spot, stage an event).
+- **Guided tours.** The Mayor asks once whether you are an engineer, a recruiter or a founder, then runs a `run_tour` written for that audience. The chat minimises while the camera flies around.
+- **City news.** "What's happening in the city?" narrates `get_city_events` like a news ticker.
+- **Job-description fit check.** Attach a PDF, TXT or MD job description with `+` (or paste the text). You get a fit score, strong matches with CV evidence, gaps and a next step.
+- **UI.** shadcn AI Elements (`message-scroller`, `message`, `bubble`, `input-group`) inside `liquid-glass-react`, with a rainbow border while the chat has focus and suggestion pills. The conversation is kept in `sessionStorage`; **New chat** clears it.
+
+`POST /api/chat` (`src/chat/server.ts`) streams TanStack AI (AG-UI) server-sent events. It only accepts same-origin requests, caps bodies at 6 MB, keeps the last 40 messages and is rate-limited to 20 requests a minute per IP (Workers rate-limit binding `CHAT_RATE_LIMITER`). Model calls go through the Cloudflare AI Gateway `main` (`src/chat/adapter.ts`), so they show up in the gateway's logs and analytics. The Anthropic key is stored in the gateway (BYOK), and the Worker only holds a gateway token:
+
+```sh
+# AI Gateway → main → Settings → Create authentication token (Run permission)
+cp .dev.vars.example .dev.vars                    # paste it as CF_AIG_TOKEN for pnpm dev
+pnpm exec wrangler secret put CF_AIG_TOKEN        # production
+```
+
+Without the token, the chat replies that the Mayor is off duty (HTTP 503).
+
 ## Stack
 
-TanStack Start (React 19, file-based routing, SSR) on Cloudflare Workers · three.js r186 (`three/webgpu`, TSL) · TanStack Store · TanStack AI tool definitions + MCP TypeScript SDK v2 + MCP Apps + MCP-B (WebMCP) · Tailwind CSS v4 · shadcn/ui + 8bitcn/ui · Biome · Vitest · Playwright + axe · lefthook · GitHub Actions.
+TanStack Start (React 19, file-based routing, SSR) on Cloudflare Workers · three.js r186 (`three/webgpu`, TSL) · TanStack Store · TanStack AI (chat, tool definitions, Anthropic adapter) via Cloudflare AI Gateway + MCP TypeScript SDK v2 + MCP Apps + MCP-B (WebMCP) · Tailwind CSS v4 · shadcn/ui + AI Elements + 8bitcn/ui · liquid-glass-react · Biome · Vitest · Playwright + axe · lefthook · GitHub Actions.
 
 ## Getting started
 
 ```sh
 corepack enable pnpm
 pnpm i
-pnpm dev            # http://localhost:3000 (?tier=webgl2|fallback forces a renderer, ?time=day|night pins the clock); MCP at /mcp
+pnpm dev            # http://localhost:3000 (?tier=webgl2|fallback forces a renderer, ?time=day|night pins the clock); MCP at /mcp, chat at /api/chat (needs CF_AIG_TOKEN in .dev.vars)
 pnpm test           # unit + component tests (builds the MCP Apps widget first)
 pnpm build && pnpm e2e
 pnpm preview & pnpm capture   # re-render public/city.jpg and public/og.jpg
@@ -95,10 +115,12 @@ src/
     world/       district builders (downtown, beach, theme park, …)
     sim/         agents: traffic, people, planes, boats, rides, animals
   components/    React HUD, zone card/drawer, agent message bubble, static fallback
+    chat/        the Mayor chat dock (glass input bar, history, attachments)
+  chat/          Mayor chat server: system prompt, AI Gateway adapter, /api/chat handler
   data/          CV content, CV queries, district layout, links
   mcp/           tool definitions, in-page (WebMCP) and remote (/mcp) implementations
     apps/        MCP Apps CV card (single-file widget build)
-  routes/        TanStack Start routes (/, /mcp)
+  routes/        TanStack Start routes (/, /mcp, /api/chat)
   start.ts       request middleware (www → apex)
 e2e/             Playwright specs
 scripts/         snapshot capture

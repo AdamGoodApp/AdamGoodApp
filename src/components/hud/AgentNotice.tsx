@@ -10,7 +10,7 @@ export function AgentNotice() {
 	if (!notice) return null;
 
 	return (
-		<div className="fixed bottom-24 left-1/2 z-30 w-max max-w-md -translate-x-1/2 max-sm:inset-x-4 max-sm:bottom-36 max-sm:w-auto max-sm:translate-x-0">
+		<div className="fixed bottom-[calc(var(--mayor-dock,5rem)+1rem)] left-1/2 z-30 w-max max-w-md -translate-x-1/2 max-sm:inset-x-4 max-sm:bottom-[calc(var(--mayor-dock,3.5rem)+5.5rem)] max-sm:w-auto max-sm:translate-x-0">
 			<Card
 				font="normal"
 				role="status"

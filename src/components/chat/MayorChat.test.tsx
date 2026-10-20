@@ -1,0 +1,152 @@
+// @vitest-environment jsdom
+import {
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@testing-library/react";
+import type { ReactNode } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MayorDock } from "./MayorDock";
+
+const chat = vi.hoisted(() => ({
+	messages: [] as unknown[],
+	sendMessage: vi.fn(),
+	status: "ready",
+	error: undefined,
+	stop: vi.fn(),
+	clear: vi.fn(),
+}));
+
+vi.mock("@tanstack/ai-react", () => ({
+	useChat: () => chat,
+	fetchServerSentEvents: () => ({}),
+}));
+vi.mock("liquid-glass-react", () => ({
+	default: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+}));
+
+class NoopObserver {
+	observe() {}
+	unobserve() {}
+	disconnect() {}
+	takeRecords() {
+		return [];
+	}
+}
+globalThis.ResizeObserver ??= NoopObserver;
+// @ts-expect-error jsdom has no IntersectionObserver; the scroller only needs the API surface.
+globalThis.IntersectionObserver ??= NoopObserver;
+
+function renderDock() {
+	return render(
+		<MayorDock
+			worldRef={{ current: null }}
+			select={() => {}}
+			hover={() => {}}
+		/>,
+	);
+}
+
+const dock = () => screen.getByTestId("mayor-dock");
+
+beforeEach(() => {
+	chat.messages = [];
+	chat.sendMessage.mockClear();
+	sessionStorage.clear();
+});
+afterEach(cleanup);
+
+describe("MayorDock", () => {
+	it("starts as a bar and opens when a suggestion is sent", () => {
+		renderDock();
+		expect(dock().dataset.state).toBe("collapsed");
+		fireEvent.click(
+			screen.getByRole("button", { name: /What's happening in the city\?/ }),
+		);
+		expect(chat.sendMessage).toHaveBeenCalledWith(
+			"What's happening in the city right now?",
+		);
+		expect(dock().dataset.state).toBe("expanded");
+		fireEvent.click(screen.getByRole("button", { name: "Minimise chat" }));
+		expect(dock().dataset.state).toBe("collapsed");
+	});
+
+	it("shows tool steps and markdown in the Mayor's answers", () => {
+		chat.messages = [
+			{
+				id: "a1",
+				role: "assistant",
+				parts: [
+					{
+						type: "tool-call",
+						id: "c1",
+						name: "focus_district",
+						arguments: "{}",
+						input: { district: "beach" },
+						state: "complete",
+						output: { ok: true },
+					},
+					{
+						type: "tool-call",
+						id: "c2",
+						name: "stage_event",
+						arguments: "{}",
+						input: { kind: "park_festival" },
+						state: "complete",
+						output: { ok: false, error: "No city here" },
+					},
+					{ type: "text", content: "**Beach** it is." },
+				],
+			},
+		];
+		renderDock();
+		const messages = screen.getByTestId("mayor-messages");
+		expect(messages.textContent).toContain("Mayor");
+		expect(messages.textContent).toContain("Focus a district · The Beach");
+		expect(messages.textContent).toContain("· No city here");
+		expect(screen.getByText("Beach").tagName).toBe("STRONG");
+	});
+
+	it("rejects unsupported files", async () => {
+		renderDock();
+		fireEvent.change(screen.getByTestId("mayor-file"), {
+			target: { files: [new File(["x"], "cv.docx")] },
+		});
+		expect(await screen.findByRole("alert")).toHaveProperty(
+			"textContent",
+			"PDF, TXT or MD files only.",
+		);
+	});
+
+	it("sends a text job description with the question", async () => {
+		renderDock();
+		fireEvent.change(screen.getByTestId("mayor-file"), {
+			target: {
+				files: [
+					new File(["Senior Rust engineer"], "jd.txt", { type: "text/plain" }),
+				],
+			},
+		});
+		expect(
+			(await screen.findByTestId("mayor-attachment")).textContent,
+		).toContain("jd.txt");
+		fireEvent.change(screen.getByTestId("mayor-input"), {
+			target: { value: "Does Adam fit?" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "Send" }));
+		await waitFor(() => expect(chat.sendMessage).toHaveBeenCalledOnce());
+		expect(chat.sendMessage.mock.calls[0]?.[0]).toEqual({
+			content: [
+				{ type: "text", content: "Does Adam fit?" },
+				{
+					type: "text",
+					content:
+						'<job_description filename="jd.txt">\nSenior Rust engineer\n</job_description>',
+				},
+			],
+			metadata: { attachment: { name: "jd.txt", size: 20 } },
+		});
+	});
+});

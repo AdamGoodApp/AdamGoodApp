@@ -23,7 +23,7 @@ export function HoverLabel() {
 		<div
 			aria-live="polite"
 			data-testid="hover-label"
-			className="pointer-events-none fixed top-4 left-1/2 z-20 -translate-x-1/2 max-sm:top-auto max-sm:bottom-24"
+			className="pointer-events-none fixed top-4 left-1/2 z-20 -translate-x-1/2 max-sm:top-auto max-sm:bottom-[calc(var(--mayor-dock,2rem)+4rem)]"
 		>
 			{text && <Badge className="text-[10px] whitespace-nowrap">{text}</Badge>}
 		</div>

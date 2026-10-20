@@ -2,6 +2,26 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "./theme.css";
+@source "../node_modules/liquid-glass-react/dist/index.esm.js";
+
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+}
+@utility scrollbar-none {
+  scrollbar-width: none;
+}
+@utility scrollbar-gutter-stable {
+  scrollbar-gutter: stable;
+}
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+@utility scroll-fade-b {
+  mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 2.5rem), transparent 100%);
+}
 
 html,
 body,
@@ -31,5 +51,64 @@ body {
   }
   to {
     transform: translateY(3px);
+  }
+}
+
+@property --mayor-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes mayor-spin {
+  to {
+    --mayor-angle: 360deg;
+  }
+}
+
+/*
+ * liquid-glass-react's mix-blend-mode edge layers make the dock an isolated
+ * group, which (as Chrome's backdrop root) stops every backdrop-filter in it,
+ * the glass blur included. The chat draws its own edge instead.
+ */
+.mayor-glass > span,
+.mayor-glass > .bg-black {
+  display: none;
+}
+
+/* Rainbow border of the Mayor chat, shown while it has focus. */
+.mayor-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 28px;
+  padding: 1.5px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 250ms ease;
+  background: conic-gradient(
+    from var(--mayor-angle),
+    #ff5e7e,
+    #ffb347,
+    #ffe66d,
+    #4ade80,
+    #38bdf8,
+    #a78bfa,
+    #ff5e7e
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+.mayor-chat:focus-within .mayor-ring {
+  opacity: 1;
+  animation: mayor-spin 4s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mayor-chat:focus-within .mayor-ring {
+    animation: none;
   }
 }

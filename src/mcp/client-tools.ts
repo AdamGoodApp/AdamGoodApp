@@ -88,7 +88,8 @@ function wait(ms: number, signal: AbortSignal | undefined): Promise<void> {
 	return promise;
 }
 
-export const CLIENT_TOOLS = [
+/** Tools that read or drive the live 3D city; only the browser can run them. */
+export const CITY_CLIENT_TOOLS = [
 	getCityState.client<CityToolContext>((_input, ctx) => {
 		const s = uiStore.state;
 		const w = world(ctx);
@@ -257,7 +258,10 @@ export const CLIENT_TOOLS = [
 			return { ok: true };
 		},
 	),
+];
 
+/** The CV data tools, run in the page for WebMCP (the chat runs them on the server). */
+const DATA_CLIENT_TOOLS = [
 	getProfile.client<CityToolContext>(DATA_TOOL_BODIES.get_profile),
 	listDistricts.client<CityToolContext>(DATA_TOOL_BODIES.list_districts),
 	getDistrictContent.client<CityToolContext>(
@@ -270,6 +274,8 @@ export const CLIENT_TOOLS = [
 	getContact.client<CityToolContext>(DATA_TOOL_BODIES.get_contact),
 	getSiteGuide.client<CityToolContext>(DATA_TOOL_BODIES.get_site_guide),
 ];
+
+export const CLIENT_TOOLS = [...CITY_CLIENT_TOOLS, ...DATA_CLIENT_TOOLS];
 
 export const WEBMCP_TOOL_OPTIONS = Object.fromEntries(
 	Object.entries(TOOL_META).map(([name, meta]) => [

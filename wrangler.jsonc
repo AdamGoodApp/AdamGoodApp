@@ -8,6 +8,17 @@
 		{ "pattern": "adamgoodapp.com", "custom_domain": true },
 		{ "pattern": "www.adamgoodapp.com", "custom_domain": true }
 	],
+	"vars": {
+		"AI_GATEWAY_ACCOUNT_ID": "c4fe6001a343c827bab996be52394a10",
+		"AI_GATEWAY_ID": "main"
+	},
+	"ratelimits": [
+		{
+			"name": "CHAT_RATE_LIMITER",
+			"namespace_id": "1001",
+			"simple": { "limit": 20, "period": 60 }
+		}
+	],
 	"observability": {
 		"logs": {
 			"enabled": true,
