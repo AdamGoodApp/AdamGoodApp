@@ -1,6 +1,11 @@
 import { fakeText } from "@tanstack/ai/testing";
 import { describe, expect, it } from "vitest";
-import { CHAT_ERRORS, createChatHandler } from "./server";
+import {
+	CHAT_ERRORS,
+	createChatHandler,
+	MAX_MESSAGES,
+	recentMessages,
+} from "./server";
 
 const URL_ = "http://test.local/api/chat";
 
@@ -126,5 +131,24 @@ describe("createChatHandler turns", () => {
 		expect(types).not.toContain("TOOL_CALL_RESULT");
 		expect(types).toContain("RUN_FINISHED");
 		expect(fake.state.callCount).toBe(1);
+	});
+});
+
+describe("recentMessages", () => {
+	it("starts the window at a user turn, never at an orphaned tool result", () => {
+		const turn = ["user", "assistant", "tool"];
+		// 45 entries: a plain 40-entry cut would open on a "tool" entry.
+		const history = Array.from({ length: 15 }, () => turn)
+			.flat()
+			.map((role, i) => ({ id: String(i), role }));
+		const window = recentMessages(history);
+		expect(window[0]?.role).toBe("user");
+		expect(window.length).toBeGreaterThanOrEqual(MAX_MESSAGES);
+		expect(window.at(-1)).toBe(history.at(-1));
+	});
+
+	it("keeps short histories whole", () => {
+		const history = [{ role: "user" }, { role: "assistant" }];
+		expect(recentMessages(history)).toEqual(history);
 	});
 });

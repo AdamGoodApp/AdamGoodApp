@@ -31,8 +31,20 @@ export interface ChatHandlerOptions {
 
 /** A 4 MB PDF is about 5.4 MB once base64-encoded inside the JSON body. */
 export const MAX_BODY_BYTES = 6_000_000;
-/** Newest UI messages forwarded to the model. */
+/** Newest wire messages (tool results count as their own entries) forwarded to the model. */
 export const MAX_MESSAGES = 40;
+
+/**
+ * The newest `MAX_MESSAGES` entries, starting at a user turn so the window
+ * never opens with tool results whose tool call was cut off.
+ */
+export function recentMessages<T extends { role: string }>(
+	messages: readonly T[],
+): T[] {
+	let start = Math.max(0, messages.length - MAX_MESSAGES);
+	while (start > 0 && messages[start]?.role !== "user") start -= 1;
+	return messages.slice(start);
+}
 
 export const CHAT_ERRORS = {
 	method: "Method not allowed",
@@ -98,7 +110,7 @@ export function createChatHandler(options: ChatHandlerOptions) {
 		const abortController = new AbortController();
 		const stream = chat({
 			adapter,
-			messages: params.messages.slice(-MAX_MESSAGES),
+			messages: recentMessages(params.messages),
 			threadId: params.threadId,
 			runId: params.runId,
 			systemPrompts: [MAYOR_SYSTEM_PROMPT],

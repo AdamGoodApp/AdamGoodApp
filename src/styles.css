@@ -76,6 +76,22 @@ body {
   display: none;
 }
 
+/* Idle edge of the Mayor chat: a faint teal → violet 1.5px border. */
+.mayor-edge {
+  position: absolute;
+  inset: 0;
+  border-radius: 28px;
+  padding: 1.5px;
+  pointer-events: none;
+  opacity: 0.55;
+  background: linear-gradient(115deg, #5eead4, rgba(255, 255, 255, 0.25) 45%, #a78bfa);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
 /* Rainbow border of the Mayor chat, shown while it has focus. */
 .mayor-ring {
   position: absolute;

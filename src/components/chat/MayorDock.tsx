@@ -190,7 +190,7 @@ function SuggestionPills({
 	onPick(suggestion: MayorSuggestion): void;
 }) {
 	return (
-		<div className="no-scrollbar flex gap-2 overflow-x-auto px-1 pb-1">
+		<div className="no-scrollbar flex gap-2 overflow-x-auto px-1 pb-1 sm:flex-wrap sm:justify-center sm:overflow-visible lg:-mx-28">
 			{MAYOR_SUGGESTIONS.map((s) => (
 				<button
 					key={s.id}
@@ -389,8 +389,9 @@ export function MayorDock({ worldRef, select, hover }: MayorChatProps) {
 					<div
 						ref={bodyRef}
 						data-testid="mayor-chat"
-						className="mayor-chat relative w-[min(640px,calc(100vw-2rem))] overflow-hidden rounded-[28px] bg-[#101012]/55 font-sans text-sm leading-normal text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.14)] [text-shadow:none]"
+						className="mayor-chat relative w-[min(640px,calc(100vw-2rem))] overflow-hidden rounded-[28px] bg-[#101012]/55 font-sans text-sm leading-normal text-white [text-shadow:none]"
 					>
+						<div className="mayor-edge" aria-hidden="true" />
 						<div className="mayor-ring" aria-hidden="true" />
 						<div
 							className="grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none"
@@ -506,7 +507,10 @@ export function MayorDock({ worldRef, select, hover }: MayorChatProps) {
 										aria-label="Attach a job description"
 										title="Attach a job description (PDF, TXT or MD)"
 										className="rounded-full text-white/80 hover:bg-white/10 hover:text-white"
-										onClick={() => fileRef.current?.click()}
+										onClick={() => {
+											sendAfterPick.current = null;
+											fileRef.current?.click();
+										}}
 									>
 										<Plus />
 									</InputGroupButton>
