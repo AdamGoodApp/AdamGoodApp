@@ -17,6 +17,8 @@ const chat = vi.hoisted(() => ({
 	error: undefined,
 	stop: vi.fn(),
 	clear: vi.fn(),
+	queue: [] as unknown[],
+	cancelQueued: vi.fn(),
 }));
 
 vi.mock("@tanstack/ai-react", () => ({
@@ -55,10 +57,36 @@ beforeEach(() => {
 	chat.messages = [];
 	chat.sendMessage.mockClear();
 	sessionStorage.clear();
+	localStorage.clear();
 });
 afterEach(cleanup);
 
 describe("MayorDock", () => {
+	it("holds a sixth request in a minute back, keeping the draft, even across a reload", () => {
+		const { unmount } = renderDock();
+		const input = screen.getByTestId("mayor-input");
+		const sendText = (text: string) => {
+			fireEvent.change(input, { target: { value: text } });
+			fireEvent.keyDown(input, { key: "Enter" });
+		};
+		for (let i = 1; i <= 3; i++) sendText(`question ${i}`);
+		unmount();
+
+		// The allowance is stored, so reloading does not reset it.
+		renderDock();
+		const again = screen.getByTestId("mayor-input");
+		for (let i = 4; i <= 6; i++) {
+			fireEvent.change(again, { target: { value: `question ${i}` } });
+			fireEvent.keyDown(again, { key: "Enter" });
+		}
+		expect(chat.sendMessage).toHaveBeenCalledTimes(5);
+		expect(chat.sendMessage).not.toHaveBeenCalledWith("question 6");
+		expect(again).toHaveProperty("value", "question 6");
+		expect(screen.getByTestId("mayor-limit").textContent).toMatch(
+			/5 requests a minute: next in \d+s/,
+		);
+	});
+
 	it("starts as a bar and opens when a suggestion is sent", () => {
 		renderDock();
 		expect(dock().dataset.state).toBe("collapsed");

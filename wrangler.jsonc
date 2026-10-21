@@ -12,7 +12,14 @@
 		"AI_GATEWAY_ACCOUNT_ID": "c4fe6001a343c827bab996be52394a10",
 		"AI_GATEWAY_ID": "main"
 	},
+	// /api/chat limits per client IP (src/routes/api/chat.ts). One visitor turn can be
+	// 2–4 requests (tool results continue the run), so the burst tier allows that.
 	"ratelimits": [
+		{
+			"name": "CHAT_BURST_LIMITER",
+			"namespace_id": "1002",
+			"simple": { "limit": 8, "period": 10 }
+		},
 		{
 			"name": "CHAT_RATE_LIMITER",
 			"namespace_id": "1001",

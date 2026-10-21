@@ -56,16 +56,20 @@ describe("createChatHandler guards", () => {
 		expect(await res.json()).toEqual({ error: CHAT_ERRORS.unconfigured });
 	});
 
-	it("applies the rate limiter per client IP", async () => {
+	it("checks each rate-limit tier per client IP and reports the tripped window", async () => {
 		const keys: string[] = [];
-		const res = await createChatHandler({
-			adapter: ok,
-			rateLimiter: {
-				limit: async ({ key }) => {
-					keys.push(key);
-					return { success: false };
+		const tier = (success: boolean, periodSeconds: number) => ({
+			periodSeconds,
+			limiter: {
+				limit: async ({ key }: { key: string }) => {
+					keys.push(`${periodSeconds}:${key}`);
+					return { success };
 				},
 			},
+		});
+		const res = await createChatHandler({
+			adapter: ok,
+			rateLimits: [tier(true, 10), tier(false, 60)],
 		})(
 			post({
 				headers: {
@@ -75,7 +79,37 @@ describe("createChatHandler guards", () => {
 			}),
 		);
 		expect(res.status).toBe(429);
-		expect(keys).toEqual(["203.0.113.7"]);
+		expect(res.headers.get("retry-after")).toBe("60");
+		expect(await res.json()).toEqual({
+			error: CHAT_ERRORS.rateLimited,
+			retryAfter: 60,
+		});
+		expect(keys).toEqual(["10:203.0.113.7", "60:203.0.113.7"]);
+	});
+
+	it("stops at the first tier that trips", async () => {
+		let minuteChecked = false;
+		const res = await createChatHandler({
+			adapter: ok,
+			rateLimits: [
+				{
+					periodSeconds: 10,
+					limiter: { limit: async () => ({ success: false }) },
+				},
+				{
+					periodSeconds: 60,
+					limiter: {
+						limit: async () => {
+							minuteChecked = true;
+							return { success: true };
+						},
+					},
+				},
+			],
+		})(post());
+		expect(res.headers.get("retry-after")).toBe("10");
+		// A burst rejection must not also spend the per-minute allowance.
+		expect(minuteChecked).toBe(false);
 	});
 
 	it("rejects a body that is not an AG-UI run", async () => {

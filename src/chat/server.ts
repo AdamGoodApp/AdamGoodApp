@@ -26,9 +26,17 @@ export interface RateLimiter {
 	limit(options: { key: string }): Promise<{ success: boolean }>;
 }
 
+/** One Workers rate-limit binding and the length of its window. */
+export interface RateLimitTier {
+	limiter: RateLimiter;
+	/** The binding's period, sent back as Retry-After when it trips. */
+	periodSeconds: number;
+}
+
 export interface ChatHandlerOptions {
 	adapter: () => AnyTextAdapter | null;
-	rateLimiter?: RateLimiter | null;
+	/** Checked in order, per client IP; the first one that trips answers 429. */
+	rateLimits?: readonly RateLimitTier[];
 	/** search_cv body; defaults to keyword search (the Worker passes semantic search). */
 	searchCv?: CvSearch;
 }
@@ -55,7 +63,7 @@ export const CHAT_ERRORS = {
 	origin: "Forbidden",
 	tooLarge: "That file is too large to send (max 4 MB).",
 	unconfigured: "The Mayor is off duty: chat is not configured on this server.",
-	rateLimited: "Easy there — too many messages in a minute. Try again shortly.",
+	rateLimited: "Easy there — too many messages. Try again shortly.",
 } as const;
 
 /** The CV data tools, run on the server; `search` is the search_cv body. */
@@ -113,10 +121,18 @@ export function createChatHandler(options: ChatHandlerOptions) {
 		const adapter = options.adapter();
 		if (!adapter) return json(503, CHAT_ERRORS.unconfigured);
 
-		if (options.rateLimiter) {
-			const key = request.headers.get("cf-connecting-ip") ?? "anonymous";
-			const { success } = await options.rateLimiter.limit({ key });
-			if (!success) return json(429, CHAT_ERRORS.rateLimited);
+		const key = request.headers.get("cf-connecting-ip") ?? "anonymous";
+		for (const { limiter, periodSeconds } of options.rateLimits ?? []) {
+			const { success } = await limiter.limit({ key });
+			if (!success) {
+				return Response.json(
+					{ error: CHAT_ERRORS.rateLimited, retryAfter: periodSeconds },
+					{
+						status: 429,
+						headers: { "Retry-After": String(periodSeconds) },
+					},
+				);
+			}
 		}
 
 		let params: Awaited<ReturnType<typeof chatParamsFromRequest>>;

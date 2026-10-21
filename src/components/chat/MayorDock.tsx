@@ -54,11 +54,14 @@ import { ChainOfThought, type ThoughtStep } from "./ChainOfThought";
 import type { MayorChatProps } from "./MayorChat";
 import { MayorMarkdown } from "./MayorMarkdown";
 import { clearMessages, loadMessages, saveMessages } from "./persistence";
+import { SEND_LIMIT, useSendLimiter } from "./send-limiter";
 import { MAYOR_SUGGESTIONS, type MayorSuggestion } from "./suggestions";
 import { TourChoices } from "./TourChoices";
 import { describeToolCall } from "./tool-steps";
 
 const CONNECTION = fetchServerSentEvents("/api/chat");
+/** Requests that can wait while the Mayor is busy. */
+const MAX_QUEUED = 2;
 
 type Part = UIMessage["parts"][number];
 type ToolCall = Extract<Part, { type: "tool-call" }>;
@@ -248,15 +251,28 @@ export function MayorDock({ worldRef, select, hover }: MayorChatProps) {
 	const [restoredIds] = useState(
 		() => new Set(initialMessages.map((m) => m.id)),
 	);
-	const { messages, sendMessage, addToolResult, status, error, stop, clear } =
-		useChat({
-			connection: CONNECTION,
-			tools: CITY_CLIENT_TOOLS,
-			context,
-			initialMessages,
-			onError: (e) => console.error("[mayor]", e),
-		});
+	const {
+		messages,
+		sendMessage,
+		addToolResult,
+		status,
+		error,
+		stop,
+		clear,
+		queue,
+		cancelQueued,
+	} = useChat({
+		connection: CONNECTION,
+		tools: CITY_CLIENT_TOOLS,
+		context,
+		initialMessages,
+		// Requests sent while the Mayor is busy wait their turn, a few at most.
+		queue: { whenBusy: "queue", drain: "fifo", maxSize: MAX_QUEUED },
+		onError: (e) => console.error("[mayor]", e),
+	});
 	const busy = status === "submitted" || status === "streaming";
+	const { trySend, waitSeconds } = useSendLimiter();
+	const queueFull = busy && queue.length >= MAX_QUEUED;
 
 	// Output only: the panel shows the latest request, the steps taken and the answer.
 	const turn = messages.slice(
@@ -348,10 +364,13 @@ export function MayorDock({ worldRef, select, hover }: MayorChatProps) {
 		};
 	}, []);
 
-	const canSend = !busy && (draft.trim().length > 0 || attachment !== null);
+	const canSend =
+		!queueFull &&
+		waitSeconds === 0 &&
+		(draft.trim().length > 0 || attachment !== null);
 
 	function send(text = draft, file = attachment) {
-		if (busy || (!text.trim() && !file)) return;
+		if (!text.trim() && !file) return;
 		if (openQuestion && text.trim()) {
 			// A typed reply answers the question; an attachment waits for the next send.
 			answer(openQuestion.id, { reply: text.trim() });
@@ -361,13 +380,22 @@ export function MayorDock({ worldRef, select, hover }: MayorChatProps) {
 			setExpanded(true);
 			return;
 		}
-		if (file) {
-			void sendMessage({
-				content: attachmentParts(text, file),
-				metadata: { attachment: { name: file.name, size: file.size } },
-			});
-		} else {
-			void sendMessage(text.trim());
+		if (queueFull) return;
+		// Over the allowance: keep the draft so it can go once a slot frees up.
+		const sent = trySend(() => {
+			if (file) {
+				void sendMessage({
+					content: attachmentParts(text, file),
+					metadata: { attachment: { name: file.name, size: file.size } },
+				});
+			} else {
+				void sendMessage(text.trim());
+			}
+		});
+		if (!sent) {
+			setDraft(text);
+			setAttachment(file);
+			return;
 		}
 		setDraft("");
 		if (textareaRef.current) textareaRef.current.style.height = "";
@@ -474,7 +502,10 @@ export function MayorDock({ worldRef, select, hover }: MayorChatProps) {
 					</div>
 				</header>
 				<div className="min-h-0 flex-1 px-2 pb-2">
-					<MessageScrollerProvider>
+					{/* One scroller per request: the panel shows a single turn, and the
+					    scroller otherwise keeps the previous request's anchor in the DOM
+					    when a queued request starts straight after. */}
+					<MessageScrollerProvider key={request?.id ?? "empty"}>
 						<MessageScroller>
 							<MessageScrollerViewport>
 								<MessageScrollerContent
@@ -519,6 +550,34 @@ export function MayorDock({ worldRef, select, hover }: MayorChatProps) {
 										>
 											{friendlyError(error)}
 										</p>
+									)}
+									{queue.length > 0 && (
+										<div
+											data-testid="mayor-queue"
+											className="flex flex-col gap-1.5"
+										>
+											<p className="retro text-[9px] text-white/60">Up next</p>
+											{queue.map((q) => (
+												<div
+													key={q.id}
+													className="retro flex min-w-0 items-center gap-2 rounded-full border border-dashed border-white/20 px-3 py-1 text-[9px] text-white/70"
+												>
+													<span className="truncate">
+														{typeof q.content === "string"
+															? q.content
+															: "Request with an attachment"}
+													</span>
+													<button
+														type="button"
+														aria-label="Cancel queued request"
+														className="ml-auto shrink-0 rounded-full p-0.5 hover:bg-white/15"
+														onClick={() => cancelQueued(q.id)}
+													>
+														<X className="size-3" />
+													</button>
+												</div>
+											))}
+										</div>
 									)}
 								</MessageScrollerContent>
 							</MessageScrollerViewport>
@@ -572,7 +631,11 @@ export function MayorDock({ worldRef, select, hover }: MayorChatProps) {
 										}}
 										onKeyDown={onKeyDown}
 										rows={1}
-										placeholder="Ask the Mayor about Adam…"
+										placeholder={
+											busy
+												? "Ask another, it runs next…"
+												: "Ask the Mayor about Adam…"
+										}
 										aria-label="Message the Mayor"
 										className="retro max-h-40 min-h-11 px-3 text-base leading-[1.8] text-white placeholder:text-white/50 sm:text-[11px]"
 									/>
@@ -620,6 +683,25 @@ export function MayorDock({ worldRef, select, hover }: MayorChatProps) {
 											>
 												{attachError}
 											</span>
+										)}
+										{waitSeconds > 0 ? (
+											<span
+												role="status"
+												data-testid="mayor-limit"
+												className="retro text-[9px] leading-[1.8] text-[#f0a585]"
+											>
+												{SEND_LIMIT} requests a minute: next in {waitSeconds}s
+											</span>
+										) : (
+											queueFull && (
+												<span
+													role="status"
+													data-testid="mayor-limit"
+													className="retro text-[9px] leading-[1.8] text-[#f0a585]"
+												>
+													{MAX_QUEUED} requests waiting
+												</span>
+											)
 										)}
 										<span className="ml-auto" />
 										{!expanded && messages.length > 0 && (

@@ -4,9 +4,10 @@ declare module "cloudflare:workers" {
 		AI_GATEWAY_ACCOUNT_ID?: string;
 		AI_GATEWAY_ID?: string;
 		CF_AIG_TOKEN?: string;
-		CHAT_RATE_LIMITER?: {
-			limit(options: { key: string }): Promise<{ success: boolean }>;
-		};
+		/** /api/chat: 20 requests a minute per IP. */
+		CHAT_RATE_LIMITER?: import("#/chat/server").RateLimiter;
+		/** /api/chat: 8 requests per 10 seconds per IP. */
+		CHAT_BURST_LIMITER?: import("#/chat/server").RateLimiter;
 		/** Workers AI, for the CV search embeddings. */
 		AI?: import("#/mcp/semantic-search").EmbeddingsBinding;
 		/** Vectorize index `adamgoodapp-cv`: the CV search vectors. */

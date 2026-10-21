@@ -49,6 +49,7 @@
 		"@tanstack/ai": "^0.69.0",
 		"@tanstack/ai-anthropic": "0.22.0",
 		"@tanstack/ai-react": "^0.30.4",
+		"@tanstack/react-pacer": "^0.24.1",
 		"@tanstack/react-router": "^1.170.45",
 		"@tanstack/react-start": "^1.169.3",
 		"@tanstack/react-store": "^0.11.2",
