@@ -136,6 +136,31 @@ describe("createChatHandler guards", () => {
 		expect(await res.json()).toEqual({ error: CHAT_ERRORS.badContent });
 	});
 
+	it("counts text parts in the wire shape the browser sends with a PDF", async () => {
+		const res = await createChatHandler({ adapter: ok })(
+			post({
+				body: body("", [
+					{
+						id: "u1",
+						role: "user",
+						content: [
+							{ type: "text", text: "x".repeat(MAX_HISTORY_CHARS + 1) },
+							{
+								type: "document",
+								source: {
+									type: "data",
+									value: "JVBE",
+									mimeType: "application/pdf",
+								},
+							},
+						],
+					},
+				]),
+			}),
+		);
+		expect(res.status).toBe(413);
+	});
+
 	it("refuses a history too long to send to the model", async () => {
 		const res = await createChatHandler({ adapter: ok })(
 			post({ body: body("x".repeat(MAX_HISTORY_CHARS + 1)) }),

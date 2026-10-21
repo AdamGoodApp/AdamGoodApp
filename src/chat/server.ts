@@ -1,7 +1,7 @@
 import {
 	type AnyTextAdapter,
 	chat,
-	chatParamsFromRequest,
+	chatParamsFromRequestBody,
 	maxIterations,
 	toServerSentEventsResponse,
 } from "@tanstack/ai";
@@ -77,7 +77,8 @@ export function historyProblem(
 		if (m.role === "user" && Array.isArray(m.content)) {
 			for (const part of m.content as Record<string, unknown>[]) {
 				if (part?.type === "text") {
-					chars += String(part.content ?? "").length;
+					// The wire shape is { type: "text", text }; count the whole part either way.
+					chars += JSON.stringify(part).length;
 					continue;
 				}
 				const source = part?.source as Record<string, unknown> | undefined;
@@ -133,6 +134,7 @@ export const CHAT_ERRORS = {
 	origin: "Forbidden",
 	tooLarge: "That file is too large to send (max 4 MB).",
 	tooLong: "This conversation is too long. Start a new chat.",
+	badBody: "That request is not a valid chat run.",
 	badContent: "Only text and PDF attachments can be sent.",
 	unconfigured: "The Mayor is off duty: chat is not configured on this server.",
 	rateLimited: "Easy there — too many messages. Try again shortly.",
@@ -220,18 +222,11 @@ export function createChatHandler(options: ChatHandlerOptions) {
 		const text = await readCapped(request, MAX_BODY_BYTES);
 		if (text === null) return json(413, CHAT_ERRORS.tooLarge);
 
-		let params: Awaited<ReturnType<typeof chatParamsFromRequest>>;
+		let params: Awaited<ReturnType<typeof chatParamsFromRequestBody>>;
 		try {
-			params = await chatParamsFromRequest(
-				new Request(request.url, {
-					method: "POST",
-					headers: request.headers,
-					body: text,
-				}),
-			);
-		} catch (e) {
-			if (e instanceof Response) return e;
-			throw e;
+			params = await chatParamsFromRequestBody(JSON.parse(text));
+		} catch {
+			return json(400, CHAT_ERRORS.badBody);
 		}
 
 		const messages = recentMessages(params.messages);
