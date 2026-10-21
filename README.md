@@ -83,7 +83,7 @@ pnpm exec wrangler secret put CF_AIG_TOKEN        # production
 
 Without the token, the chat replies that the Mayor is off duty (HTTP 503).
 
-**Abuse limits.** The browser holds a visitor to 5 requests in any rolling minute with TanStack Pacer's rate limiter (`src/components/chat/send-limiter.ts`); the send times are kept in `localStorage`, so a reload doesn't reset the allowance, and an over-limit request stays in the input with a countdown. Requests sent while the Mayor is still answering wait in TanStack AI's built-in send queue (`useChat({ queue })`, first in first out, at most 2), listed as "Up next" with a cancel button. Neither can be trusted on its own, so the Worker enforces per-IP limits with two Workers rate-limit bindings: 8 requests per 10 seconds (`CHAT_BURST_LIMITER`) and 20 a minute (`CHAT_RATE_LIMITER`). One visitor turn can be 2–4 requests, because tool results continue the run. A tripped tier answers 429 with `Retry-After`.
+**Abuse limits.** The browser holds a visitor to 5 requests in any rolling minute with TanStack Pacer's rate limiter (`src/components/chat/send-limiter.ts`); the send times are kept in `localStorage`, so a reload doesn't reset the allowance, and an over-limit request stays in the input with a countdown. Requests sent while the Mayor is still answering wait in TanStack AI's built-in send queue (`useChat({ queue })`, first in first out, at most 2), listed as "Up next" with a cancel button. A client can skip all of that, so the Worker enforces sliding-window limits per IP with one `ChatRateLimiter` Durable Object per client (`src/chat/rate-limiter-object.ts`, exported from the custom entry `src/server.ts`): 8 requests per 10 seconds, 20 a minute and 200 a day (`src/chat/rate-limit.ts`). One visitor turn can be 2–4 requests, because tool results continue the run. A refusal answers 429 with `Retry-After`. A Durable Object handles one request at a time, so the counts are exact; the Workers rate limiting binding was tried first, but its per-machine, eventually consistent counts let 45 requests in 14 seconds through.
 
 ## Evals
 
@@ -134,6 +134,7 @@ src/
   mcp/           tool definitions, in-page (WebMCP) and remote (/mcp) implementations
     apps/        MCP Apps CV card (single-file widget build)
   routes/        TanStack Start routes (/, /mcp, /api/chat)
+  server.ts      Worker entry: TanStack Start's handler + Durable Object exports
   start.ts       request middleware (www → apex)
 e2e/             Playwright specs
 scripts/         snapshot capture
