@@ -19,27 +19,14 @@ import {
 	searchCv,
 } from "#/mcp/definitions";
 import type { CvSearch } from "#/mcp/semantic-search";
+import type { LimitResult } from "./rate-limit";
 import { MAYOR_SYSTEM_PROMPT } from "./system-prompt";
 import { askTourAudience } from "./tour";
 
-export interface RateLimiter {
-	limit(options: { key: string }): Promise<{ success: boolean }>;
-}
-
-/** One Workers rate-limit binding and the length of its window. */
-export interface RateLimitTier {
-	limiter: RateLimiter;
-	/** The binding's period, sent back as Retry-After when it trips. */
-	periodSeconds: number;
-}
-
 export interface ChatHandlerOptions {
 	adapter: () => AnyTextAdapter | null;
-	/**
-	 * Checked in order, per client IP; the first one that trips answers 429.
-	 * A function, like `adapter`: Worker bindings are read per request.
-	 */
-	rateLimits?: () => readonly RateLimitTier[];
+	/** Counts one request for this client key (its IP); a refusal answers 429. */
+	rateLimit?: (key: string) => Promise<LimitResult>;
 	/** search_cv body; defaults to keyword search (the Worker passes semantic search). */
 	searchCv?: CvSearch;
 }
@@ -124,15 +111,18 @@ export function createChatHandler(options: ChatHandlerOptions) {
 		const adapter = options.adapter();
 		if (!adapter) return json(503, CHAT_ERRORS.unconfigured);
 
-		const key = request.headers.get("cf-connecting-ip") ?? "anonymous";
-		for (const { limiter, periodSeconds } of options.rateLimits?.() ?? []) {
-			const { success } = await limiter.limit({ key });
-			if (!success) {
+		if (options.rateLimit) {
+			const key = request.headers.get("cf-connecting-ip") ?? "anonymous";
+			const limit = await options.rateLimit(key);
+			if (!limit.success) {
 				return Response.json(
-					{ error: CHAT_ERRORS.rateLimited, retryAfter: periodSeconds },
+					{
+						error: CHAT_ERRORS.rateLimited,
+						retryAfter: limit.retryAfterSeconds,
+					},
 					{
 						status: 429,
-						headers: { "Retry-After": String(periodSeconds) },
+						headers: { "Retry-After": String(limit.retryAfterSeconds) },
 					},
 				);
 			}

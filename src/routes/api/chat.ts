@@ -1,27 +1,17 @@
 import { env } from "cloudflare:workers";
 import { createFileRoute } from "@tanstack/react-router";
 import { createGatewayAdapter, MAYOR_MODEL } from "#/chat/adapter";
-import { createChatHandler, type RateLimitTier } from "#/chat/server";
+import { CHAT_LIMITS } from "#/chat/rate-limit";
+import { createChatHandler } from "#/chat/server";
 import { createCvSearch } from "#/mcp/semantic-search";
-
-/**
- * Per-IP limits from wrangler.jsonc: a burst cap, then a per-minute cap. Read
- * per request: bindings are not on `env` yet while this module first loads.
- */
-function rateLimits(): RateLimitTier[] {
-	const tiers: RateLimitTier[] = [];
-	if (env.CHAT_BURST_LIMITER) {
-		tiers.push({ limiter: env.CHAT_BURST_LIMITER, periodSeconds: 10 });
-	}
-	if (env.CHAT_RATE_LIMITER) {
-		tiers.push({ limiter: env.CHAT_RATE_LIMITER, periodSeconds: 60 });
-	}
-	return tiers;
-}
 
 const handleChat = createChatHandler({
 	adapter: () => createGatewayAdapter(env, MAYOR_MODEL, { app: "mayor-chat" }),
-	rateLimits,
+	// One rate-limiter Durable Object per client IP (src/chat/rate-limiter-object.ts).
+	rateLimit: async (key) =>
+		env.CHAT_LIMITER
+			? env.CHAT_LIMITER.getByName(key).hit(CHAT_LIMITS)
+			: { success: true },
 	searchCv: createCvSearch(env),
 });
 

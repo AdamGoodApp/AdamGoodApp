@@ -3,7 +3,8 @@
 	"name": "adamgoodapp",
 	"compatibility_date": "2026-10-01",
 	"compatibility_flags": ["nodejs_compat"],
-	"main": "@tanstack/react-start/server-entry",
+	// TanStack Start's handler plus the Durable Object exports (src/server.ts).
+	"main": "./src/server.ts",
 	"routes": [
 		{ "pattern": "adamgoodapp.com", "custom_domain": true },
 		{ "pattern": "www.adamgoodapp.com", "custom_domain": true }
@@ -12,20 +13,12 @@
 		"AI_GATEWAY_ACCOUNT_ID": "c4fe6001a343c827bab996be52394a10",
 		"AI_GATEWAY_ID": "main"
 	},
-	// /api/chat limits per client IP (src/routes/api/chat.ts). One visitor turn can be
-	// 2–4 requests (tool results continue the run), so the burst tier allows that.
-	"ratelimits": [
-		{
-			"name": "CHAT_BURST_LIMITER",
-			"namespace_id": "1002",
-			"simple": { "limit": 8, "period": 10 }
-		},
-		{
-			"name": "CHAT_RATE_LIMITER",
-			"namespace_id": "1001",
-			"simple": { "limit": 20, "period": 60 }
-		}
-	],
+	// /api/chat limits per client IP: one ChatRateLimiter Durable Object per IP
+	// (src/chat/rate-limiter-object.ts, limits in src/chat/rate-limit.ts).
+	"durable_objects": {
+		"bindings": [{ "name": "CHAT_LIMITER", "class_name": "ChatRateLimiter" }]
+	},
+	"migrations": [{ "tag": "v1", "new_sqlite_classes": ["ChatRateLimiter"] }],
 	// CV search: Workers AI embeddings into the Vectorize index (src/mcp/semantic-search.ts).
 	"ai": { "binding": "AI" },
 	"vectorize": [{ "binding": "CV_INDEX", "index_name": "adamgoodapp-cv" }],
