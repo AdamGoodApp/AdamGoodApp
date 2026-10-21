@@ -7,11 +7,13 @@ Senior Full-Stack Engineer in Tokyo — TypeScript, React/TanStack, three.js, AI
 ![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-f38020?logo=cloudflare&logoColor=white)
 ![three.js WebGPU](https://img.shields.io/badge/three.js-WebGPU-000?logo=threedotjs)
 
-[![The AdamGoodApp city](public/city.jpg)](https://adamgoodapp.com)
+[![How AdamGoodApp is built: TanStack, the three.js WebGPU city, the Mayor chat, hybrid RAG search, rate limits, evals and MCP](docs/media/tech-deck.gif)](https://adamgoodapp.com)
 
 **→ [adamgoodapp.com](https://adamgoodapp.com)**
 
 ## What it is
+
+[![The AdamGoodApp city](public/city.jpg)](https://adamgoodapp.com)
 
 My CV as a living, SimCity-style isometric city that fills the whole screen: seven career districts in the middle, surrounded by downtown overspill, an industrial belt, dense neighbourhoods and a marina, with the sea only off the beach corner. Every district is a chapter of my career, marked by a floating light bulb: hover a bulb or a district to outline it, click to read that section. Scroll or pinch to zoom toward the pointer and drag to pan around the details. Traffic, buses, a tram and police patrols fill the roads, fire crews fight a house fire in the suburbs, ambulances run to the hospital, a rally gathers outside the town hall, the arena lights up its searchlights at night, boats sail past the lighthouse, and an "AdamGoodApp" sign glows on the hill in the middle. The city runs a day/night cycle; the button in the top-right corner flips between day and night, and AUTO resumes the cycle. LinkedIn, GitHub and email are in the bottom-right corner.
 
@@ -161,7 +163,7 @@ src/
   start.ts       request middleware (www → apex)
 e2e/             Playwright specs
 evals/           model and retrieval evals (pnpm eval)
-docs/media/      README GIFs (recorded from the live site, edited with HyperFrames)
+docs/media/      README GIFs made with HyperFrames (tech deck, live-site recordings)
 scripts/         snapshot capture
 ```
 
