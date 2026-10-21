@@ -33,13 +33,21 @@ function Canvas({ worldRef }: { worldRef: RefObject<CityWorld | null> }) {
 		};
 
 		const lite = readParam("e2e") === "1";
-		const watchdog = window.setTimeout(
-			() => {
-				if (!uiStore.state.ready)
-					fail(new Error("no first frame before the watchdog"));
-			},
-			lite ? WATCHDOG_TEST_MS : WATCHDOG_MS,
-		);
+		// Browsers suspend the render loop in hidden tabs, so the watchdog only
+		// runs while the tab is visible and restarts when it shows again.
+		let watchdog = 0;
+		const armWatchdog = () => {
+			window.clearTimeout(watchdog);
+			if (document.hidden || uiStore.state.ready) return;
+			watchdog = window.setTimeout(
+				() => {
+					if (!uiStore.state.ready && !document.hidden)
+						fail(new Error("no first frame before the watchdog"));
+				},
+				lite ? WATCHDOG_TEST_MS : WATCHDOG_MS,
+			);
+		};
+		armWatchdog();
 
 		const desktopMq = matchMedia(DESKTOP_QUERY);
 		const motionMq = matchMedia("(prefers-reduced-motion: reduce)");
@@ -49,7 +57,10 @@ function Canvas({ worldRef }: { worldRef: RefObject<CityWorld | null> }) {
 			world?.setMode(isDesktop ? "fixed" : "pannable");
 		};
 		const onMotion = () => world?.setReducedMotion(motionMq.matches);
-		const onVisibility = () => world?.setPaused(document.hidden);
+		const onVisibility = () => {
+			world?.setPaused(document.hidden);
+			armWatchdog();
+		};
 
 		(async () => {
 			const forced = readParam("tier") === "webgl2" ? "webgl2" : null;

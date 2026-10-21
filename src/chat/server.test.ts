@@ -3,17 +3,22 @@ import { describe, expect, it } from "vitest";
 import {
 	CHAT_ERRORS,
 	createChatHandler,
+	MAX_BODY_BYTES,
+	MAX_HISTORY_CHARS,
 	MAX_MESSAGES,
 	recentMessages,
 } from "./server";
 
 const URL_ = "http://test.local/api/chat";
 
-function body(text: string) {
+function body(
+	text: string,
+	messages: unknown[] = [{ id: "u1", role: "user", content: text }],
+) {
 	return JSON.stringify({
 		threadId: "t",
 		runId: "r",
-		messages: [{ id: "u1", role: "user", content: text }],
+		messages,
 		tools: [],
 		context: [],
 		forwardedProps: {},
@@ -81,6 +86,63 @@ describe("createChatHandler guards", () => {
 		expect(keys).toEqual(["203.0.113.7"]);
 	});
 
+	it("answers 403, not 500, to an opaque Origin", async () => {
+		const res = await createChatHandler({ adapter: ok })(
+			post({ headers: { "content-type": "application/json", origin: "null" } }),
+		);
+		expect(res.status).toBe(403);
+	});
+
+	it("caps the body even without a Content-Length header", async () => {
+		const big = new TextEncoder().encode("x".repeat(1_000_000));
+		let sent = 0;
+		const stream = new ReadableStream<Uint8Array>({
+			pull(controller) {
+				if (sent > MAX_BODY_BYTES) return controller.close();
+				sent += big.byteLength;
+				controller.enqueue(big);
+			},
+		});
+		const res = await createChatHandler({ adapter: ok })(
+			new Request(URL_, {
+				method: "POST",
+				body: stream,
+				// @ts-expect-error Node's fetch needs duplex for a streamed body.
+				duplex: "half",
+			}),
+		);
+		expect(res.status).toBe(413);
+	});
+
+	it("refuses document sources the model provider would fetch", async () => {
+		const res = await createChatHandler({ adapter: ok })(
+			post({
+				body: body("", [
+					{
+						id: "u1",
+						role: "user",
+						content: [
+							{ type: "text", content: "Fit?" },
+							{
+								type: "document",
+								source: { type: "url", value: "https://example.com/huge.pdf" },
+							},
+						],
+					},
+				]),
+			}),
+		);
+		expect(res.status).toBe(400);
+		expect(await res.json()).toEqual({ error: CHAT_ERRORS.badContent });
+	});
+
+	it("refuses a history too long to send to the model", async () => {
+		const res = await createChatHandler({ adapter: ok })(
+			post({ body: body("x".repeat(MAX_HISTORY_CHARS + 1)) }),
+		);
+		expect(res.status).toBe(413);
+	});
+
 	it("rejects a body that is not an AG-UI run", async () => {
 		const res = await createChatHandler({ adapter: ok })(post({ body: "{}" }));
 		expect(res.status).toBe(400);
@@ -146,8 +208,17 @@ describe("recentMessages", () => {
 			.map((role, i) => ({ id: String(i), role }));
 		const window = recentMessages(history);
 		expect(window[0]?.role).toBe("user");
-		expect(window.length).toBeGreaterThanOrEqual(MAX_MESSAGES);
+		expect(window.length).toBeLessThanOrEqual(MAX_MESSAGES);
 		expect(window.at(-1)).toBe(history.at(-1));
+	});
+
+	it("opens at the first user turn inside the window, dropping older entries", () => {
+		const history = [
+			{ role: "user" },
+			...Array.from({ length: 500 }, () => ({ role: "assistant" })),
+			{ role: "user" },
+		];
+		expect(recentMessages(history)).toEqual([{ role: "user" }]);
 	});
 
 	it("keeps short histories whole", () => {

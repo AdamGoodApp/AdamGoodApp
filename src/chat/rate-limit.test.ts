@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type LimitTier, slidingWindowHit } from "./rate-limit";
+import { clientKey, type LimitTier, slidingWindowHit } from "./rate-limit";
 
 const TIERS: LimitTier[] = [
 	{ limit: 3, periodMs: 10_000 },
@@ -47,5 +47,24 @@ describe("slidingWindowHit", () => {
 	it("forgets requests older than the longest window", () => {
 		const { hits } = slidingWindowHit([0, 1, 2], TIERS, 120_000);
 		expect(hits).toEqual([120_000]);
+	});
+});
+
+describe("clientKey", () => {
+	it("keeps IPv4 addresses whole", () => {
+		expect(clientKey("203.0.113.7")).toBe("203.0.113.7");
+	});
+
+	it("groups every IPv6 address of one /64 under one key", () => {
+		const a = clientKey("2001:db8:85a3:12::1");
+		expect(a).toBe("2001:db8:85a3:12::/64");
+		expect(clientKey("2001:0db8:85a3:0012:ffff:1:2:3")).toBe(a);
+		expect(clientKey("2001:DB8:85A3:12:abcd::")).toBe(a);
+		expect(clientKey("2001:db8:85a3:13::1")).not.toBe(a);
+	});
+
+	it("expands a :: inside the /64", () => {
+		expect(clientKey("2001:db8::1")).toBe("2001:db8:0:0::/64");
+		expect(clientKey("::1")).toBe("0:0:0:0::/64");
 	});
 });

@@ -16,7 +16,7 @@ export function CvOutline() {
 					>
 						<h2>{content.title}</h2>
 						<p>{content.tagline}</p>
-						<ZoneContent zone={content} />
+						<ZoneContent zone={content} outline />
 					</section>
 				);
 			})}

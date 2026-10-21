@@ -48,3 +48,27 @@ export function slidingWindowHit(
 	}
 	return { result: { success: true }, hits: [...kept, now] };
 }
+
+/**
+ * The limiter key for a client IP. An IPv6 client usually controls a whole
+ * /64, so all addresses in one /64 share a key; IPv4 addresses are kept whole.
+ */
+export function clientKey(ip: string): string {
+	if (!ip.includes(":")) return ip;
+	const [head = "", tail = ""] = ip.toLowerCase().split("::");
+	const left = head ? head.split(":") : [];
+	const right = ip.includes("::") && tail ? tail.split(":") : [];
+	// An IPv4-mapped tail ("::ffff:1.2.3.4") counts as two groups; it sits past the /64 anyway.
+	const rightGroups = right.reduce((n, g) => n + (g.includes(".") ? 2 : 1), 0);
+	const groups = ip.includes("::")
+		? [
+				...left,
+				...Array(Math.max(0, 8 - left.length - rightGroups)).fill("0"),
+				...right,
+			]
+		: left;
+	const prefix = groups
+		.slice(0, 4)
+		.map((g) => (Number.parseInt(g, 16) || 0).toString(16));
+	return `${prefix.join(":")}::/64`;
+}

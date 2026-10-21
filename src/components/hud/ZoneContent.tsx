@@ -38,7 +38,13 @@ export function external(href: string) {
 		: { target: "_blank", rel: "noreferrer" };
 }
 
-function BlockView({ block }: { block: Block }) {
+/**
+ * `outline`: the screen-reader / crawler copy. Every tab is rendered (Radix
+ * renders only the selected one) and links are kept out of the Tab order,
+ * since the outline is visually hidden.
+ */
+function BlockView({ block, outline }: { block: Block; outline: boolean }) {
+	const linkProps = outline ? { tabIndex: -1 } : {};
 	switch (block.kind) {
 		case "heading":
 			return (
@@ -58,6 +64,22 @@ function BlockView({ block }: { block: Block }) {
 				</div>
 			);
 		case "tabs":
+			if (outline) {
+				return (
+					<div className="space-y-3">
+						{block.tabs.map((tab) => (
+							<section key={tab.label} className="space-y-3">
+								<h3>
+									{tab.label}: {tab.heading}
+								</h3>
+								<p>{tab.sub}</p>
+								<Bullets items={tab.bullets} />
+								<Badges items={tab.badges} />
+							</section>
+						))}
+					</div>
+				);
+			}
 			return (
 				<Tabs defaultValue={block.tabs[0]?.label} className="gap-4">
 					<TabsList className="mx-1.5 w-[calc(100%-12px)]">
@@ -93,7 +115,7 @@ function BlockView({ block }: { block: Block }) {
 					<h3 className="retro text-[11px]">{block.name}</h3>
 					<p className="text-sm leading-relaxed">{block.text}</p>
 					<Button asChild size="sm" font="retro" className="ml-1.5 text-[10px]">
-						<a href={block.href} {...external(block.href)}>
+						<a href={block.href} {...external(block.href)} {...linkProps}>
 							OPEN ↗
 						</a>
 					</Button>
@@ -102,13 +124,19 @@ function BlockView({ block }: { block: Block }) {
 	}
 }
 
-export function ZoneContent({ zone }: { zone: ZoneContentData }) {
+export function ZoneContent({
+	zone,
+	outline = false,
+}: {
+	zone: ZoneContentData;
+	outline?: boolean;
+}) {
 	return (
 		<div className="space-y-5 font-sans">
 			{zone.blocks.map((block, i) => (
 				// Blocks are static content; the index is a stable key.
 				// biome-ignore lint/suspicious/noArrayIndexKey: static list
-				<BlockView key={i} block={block} />
+				<BlockView key={i} block={block} outline={outline} />
 			))}
 			{zone.links && (
 				<div className="flex flex-wrap gap-4 px-1.5">
@@ -120,7 +148,11 @@ export function ZoneContent({ zone }: { zone: ZoneContentData }) {
 							font="retro"
 							className="text-[10px]"
 						>
-							<a href={link.href} {...external(link.href)}>
+							<a
+								href={link.href}
+								{...external(link.href)}
+								{...(outline ? { tabIndex: -1 } : {})}
+							>
 								{link.label.toUpperCase()}
 							</a>
 						</Button>

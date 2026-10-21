@@ -20,6 +20,14 @@ declare module "cloudflare:workers" {
 
 	/** Base class of Durable Objects (the slice this app uses). */
 	export abstract class DurableObject {
+		protected ctx: {
+			storage: {
+				get<T>(key: string): Promise<T | undefined>;
+				put<T>(key: string, value: T): Promise<void>;
+				setAlarm(scheduledTime: number): Promise<void>;
+				deleteAll(): Promise<void>;
+			};
+		};
 		constructor(ctx: unknown, env: unknown);
 	}
 }
