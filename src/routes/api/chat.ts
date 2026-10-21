@@ -1,11 +1,11 @@
 import { env } from "cloudflare:workers";
 import { createFileRoute } from "@tanstack/react-router";
-import { createMayorAdapter } from "#/chat/adapter";
+import { createGatewayAdapter, MAYOR_MODEL } from "#/chat/adapter";
 import { createChatHandler } from "#/chat/server";
 import { createCvSearch } from "#/mcp/semantic-search";
 
 const handleChat = createChatHandler({
-	adapter: () => createMayorAdapter(env),
+	adapter: () => createGatewayAdapter(env, MAYOR_MODEL, { app: "mayor-chat" }),
 	rateLimiter: env.CHAT_RATE_LIMITER ?? null,
 	searchCv: createCvSearch(env),
 });

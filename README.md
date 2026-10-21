@@ -83,6 +83,15 @@ pnpm exec wrangler secret put CF_AIG_TOKEN        # production
 
 Without the token, the chat replies that the Mayor is off duty (HTTP 503).
 
+## Evals
+
+`pnpm eval` grades the AI against the real services. CI runs it (`.github/workflows/evals.yml`) when the chat, MCP, CV data or evals change, or on demand. It writes a markdown report to `evals/results/` and to the GitHub job summary.
+
+- **Retrieval** (`evals/search.eval.ts`): 18 plain-language queries ("privacy regulations", "reducing video buffering") that should find a specific CV line. It runs the production `search_cv` code from Node against the real Vectorize index (`evals/cloudflare.ts` backs the Worker bindings with the REST API) and reports hit@5 and MRR@5 for the hybrid search and for keyword matching alone. Fails below the floors (hit@5 0.9, MRR@5 0.75) or if the hybrid search ranks worse than keywords.
+- **Mayor behaviour** (`evals/mayor.eval.ts`): 11 requests through the real prompt, model (Claude Haiku 5.5) and CV search, with the city tools stubbed as a running city (`evals/mayor.ts`). Code checks cover what can be checked exactly: the right tool and arguments ("Make it night" → `set_time_of_day` night), the tour asking first and then flying the recruiter route once, the fit-check format, no follow-up questions. An LLM judge (Claude Sonnet 5.5, structured output, `evals/judge.ts`) reads the reply against the CV and lists any claim the CV doesn't support, which covers invented facts, prompt injection and speaking as Adam.
+
+Calls skip the AI Gateway cache, so each run samples the models again. Locally, put `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_EVALS_TOKEN` (Workers AI read, Vectorize edit, AI Gateway run) in `.env.evals.local`; CI reads the `CLOUDFLARE_EVALS_TOKEN` secret.
+
 ## Stack
 
 TanStack Start (React 19, file-based routing, SSR, experimental React Server Components via `@vitejs/plugin-rsc`) on Cloudflare Workers · three.js r186 (`three/webgpu`, TSL) · TanStack Store · TanStack AI (chat, tool definitions, Anthropic adapter) via Cloudflare AI Gateway · Workers AI embeddings + Vectorize · MCP TypeScript SDK v2 + MCP Apps + MCP-B (WebMCP) · Tailwind CSS v4 · shadcn/ui + AI Elements + 8bitcn/ui · liquid-glass-react · Biome · Vitest · Playwright + axe · lefthook · GitHub Actions.
@@ -95,6 +104,7 @@ pnpm i
 pnpm dev            # http://localhost:3000 (?tier=webgl2|fallback forces a renderer, ?time=day|night pins the clock); MCP at /mcp, chat at /api/chat (needs CF_AIG_TOKEN in .dev.vars). Workers AI and Vectorize run remotely, so dev and preview need `wrangler login` or CLOUDFLARE_API_TOKEN; with CI set they are off and search_cv uses keywords
 pnpm test           # unit + component tests (builds the MCP Apps widget first)
 pnpm build && pnpm e2e
+pnpm eval           # model and retrieval evals against real Cloudflare services (needs .env.evals.local)
 pnpm preview & pnpm capture   # re-render public/city.jpg and public/og.jpg
 ```
 
@@ -106,7 +116,7 @@ pnpm preview & pnpm capture   # re-render public/city.jpg and public/og.jpg
 2. **e2e** — Playwright (desktop, mobile and fallback specs, axe scan) against `pnpm preview` with SwiftShader (no remote bindings in CI, so search is keyword-only there).
 3. **deploy** — on `main` only: `wrangler deploy` to the `adamgoodapp` Worker, which owns the custom domains `adamgoodapp.com` and `www.adamgoodapp.com` (`www` 301s to the apex).
 
-Required repository secrets: `CLOUDFLARE_API_TOKEN` (Workers Scripts edit + zone DNS/Workers Routes edit for `adamgoodapp.com`) and `CLOUDFLARE_ACCOUNT_ID`.
+Required repository secrets: `CLOUDFLARE_API_TOKEN` (Workers Scripts edit + zone DNS/Workers Routes edit for `adamgoodapp.com`), `CLOUDFLARE_ACCOUNT_ID`, and `CLOUDFLARE_EVALS_TOKEN` for the evals workflow.
 
 ## Project structure
 

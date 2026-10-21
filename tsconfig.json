@@ -2,10 +2,12 @@
 	"include": [
 		"src",
 		"e2e",
+		"evals",
 		"scripts",
 		"vite.config.ts",
 		"vite.widget.config.ts",
 		"vitest.config.ts",
+		"vitest.evals.config.ts",
 		"playwright.config.ts"
 	],
 	"compilerOptions": {

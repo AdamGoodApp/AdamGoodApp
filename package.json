@@ -26,7 +26,8 @@
 		"capture": "node scripts/capture-fallback.mjs",
 		"generate-routes": "tsr generate",
 		"deploy": "pnpm build && wrangler deploy",
-		"prepare": "lefthook install"
+		"prepare": "lefthook install",
+		"eval": "vitest run --config vitest.evals.config.ts"
 	},
 	"pnpm": {
 		"onlyBuiltDependencies": [
@@ -93,6 +94,6 @@
 		"vite-plugin-singlefile": "^2.3.4",
 		"vitest": "^5.0.5",
 		"webmcp-types": "0.1.9",
-		"wrangler": "^4.151.1"
+		"wrangler": "^4.151.3"
 	}
 }

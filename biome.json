@@ -6,6 +6,7 @@
 		"includes": [
 			"**/src/**/*",
 			"**/e2e/**/*",
+			"**/evals/**/*",
 			"**/scripts/**/*",
 			"**/.vscode/**/*",
 			"**/*.config.ts",

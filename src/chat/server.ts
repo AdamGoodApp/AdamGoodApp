@@ -58,13 +58,8 @@ export const CHAT_ERRORS = {
 	rateLimited: "Easy there — too many messages in a minute. Try again shortly.",
 } as const;
 
-/**
- * The CV data tools run here; the city tools and ask_tour_audience are bare
- * definitions, so their calls stream to the browser, which runs them against
- * the live city or asks the visitor.
- * Tool declarations sent by the client are ignored: this list is the allowlist.
- */
-function chatTools(search: CvSearch) {
+/** The CV data tools, run on the server; `search` is the search_cv body. */
+export function mayorDataTools(search: CvSearch) {
 	return [
 		getProfile.server(DATA_TOOL_BODIES.get_profile),
 		listDistricts.server(DATA_TOOL_BODIES.list_districts),
@@ -75,10 +70,16 @@ function chatTools(search: CvSearch) {
 		listProjects.server(DATA_TOOL_BODIES.list_projects),
 		getContact.server(DATA_TOOL_BODIES.get_contact),
 		getSiteGuide.server(DATA_TOOL_BODIES.get_site_guide),
-		...CITY_TOOLS,
-		askTourAudience,
 	];
 }
+
+/** The Mayor's chat() settings besides adapter, messages and tools; the evals use them too. */
+export const MAYOR_CHAT_SETTINGS = {
+	systemPrompts: [MAYOR_SYSTEM_PROMPT],
+	agentLoopStrategy: maxIterations(8),
+	// Stream a thinking summary for the dock's chain of thought.
+	reasoning: { level: "low" as const, summary: true },
+};
 
 function json(status: number, error: string): Response {
 	return Response.json({ error }, { status });
@@ -86,9 +87,17 @@ function json(status: number, error: string): Response {
 
 /** POST /api/chat: one Mayor turn, streamed as AG-UI server-sent events. */
 export function createChatHandler(options: ChatHandlerOptions) {
-	const tools = chatTools(
-		options.searchCv ?? (async (args) => DATA_TOOL_BODIES.search_cv(args)),
-	);
+	// The CV data tools run here; the city tools and ask_tour_audience are bare
+	// definitions, so their calls stream to the browser, which runs them against
+	// the live city or asks the visitor. Tool declarations sent by the client
+	// are ignored: this list is the allowlist.
+	const tools = [
+		...mayorDataTools(
+			options.searchCv ?? (async (args) => DATA_TOOL_BODIES.search_cv(args)),
+		),
+		...CITY_TOOLS,
+		askTourAudience,
+	];
 	return async (request: Request): Promise<Response> => {
 		if (request.method !== "POST") return json(405, CHAT_ERRORS.method);
 
@@ -124,11 +133,8 @@ export function createChatHandler(options: ChatHandlerOptions) {
 			messages: recentMessages(params.messages),
 			threadId: params.threadId,
 			runId: params.runId,
-			systemPrompts: [MAYOR_SYSTEM_PROMPT],
+			...MAYOR_CHAT_SETTINGS,
 			tools,
-			agentLoopStrategy: maxIterations(8),
-			// Stream a thinking summary for the dock's chain of thought.
-			reasoning: { level: "low", summary: true },
 			abortController,
 		});
 		return toServerSentEventsResponse(stream, { abortController });

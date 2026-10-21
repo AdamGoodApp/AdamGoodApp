@@ -1,0 +1,48 @@
+name: Evals
+
+# Model and retrieval evals (pnpm eval) against the real Workers AI, Vectorize
+# and AI Gateway. They cost a few cents a run, so they run when the AI code,
+# the CV or the evals change, and on demand.
+on:
+  push:
+    branches: [main]
+    paths: &ai-paths
+      - "src/chat/**"
+      - "src/mcp/**"
+      - "src/data/**"
+      - "evals/**"
+      - "vitest.evals.config.ts"
+      - ".github/workflows/evals.yml"
+  pull_request:
+    paths: *ai-paths
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evals-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm eval
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_EVALS_TOKEN: ${{ secrets.CLOUDFLARE_EVALS_TOKEN }}
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: eval-results
+          path: evals/results
+          retention-days: 30
