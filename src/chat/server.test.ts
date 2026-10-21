@@ -69,7 +69,7 @@ describe("createChatHandler guards", () => {
 		});
 		const res = await createChatHandler({
 			adapter: ok,
-			rateLimits: [tier(true, 10), tier(false, 60)],
+			rateLimits: () => [tier(true, 10), tier(false, 60)],
 		})(
 			post({
 				headers: {
@@ -91,7 +91,7 @@ describe("createChatHandler guards", () => {
 		let minuteChecked = false;
 		const res = await createChatHandler({
 			adapter: ok,
-			rateLimits: [
+			rateLimits: () => [
 				{
 					periodSeconds: 10,
 					limiter: { limit: async () => ({ success: false }) },

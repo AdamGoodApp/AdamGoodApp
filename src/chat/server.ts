@@ -35,8 +35,11 @@ export interface RateLimitTier {
 
 export interface ChatHandlerOptions {
 	adapter: () => AnyTextAdapter | null;
-	/** Checked in order, per client IP; the first one that trips answers 429. */
-	rateLimits?: readonly RateLimitTier[];
+	/**
+	 * Checked in order, per client IP; the first one that trips answers 429.
+	 * A function, like `adapter`: Worker bindings are read per request.
+	 */
+	rateLimits?: () => readonly RateLimitTier[];
 	/** search_cv body; defaults to keyword search (the Worker passes semantic search). */
 	searchCv?: CvSearch;
 }
@@ -122,7 +125,7 @@ export function createChatHandler(options: ChatHandlerOptions) {
 		if (!adapter) return json(503, CHAT_ERRORS.unconfigured);
 
 		const key = request.headers.get("cf-connecting-ip") ?? "anonymous";
-		for (const { limiter, periodSeconds } of options.rateLimits ?? []) {
+		for (const { limiter, periodSeconds } of options.rateLimits?.() ?? []) {
 			const { success } = await limiter.limit({ key });
 			if (!success) {
 				return Response.json(
