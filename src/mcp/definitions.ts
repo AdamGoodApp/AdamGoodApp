@@ -270,7 +270,7 @@ export const highlightSpot = toolDefinition({
 export const getProfile = toolDefinition({
 	name: "get_profile",
 	description:
-		"Get Adam Rais's profile: title, location, summary, headline achievements, spoken languages and links.",
+		"Get Adam's profile: title, location, summary, headline achievements, spoken languages and links.",
 	inputSchema: empty,
 	outputSchema: profileResult,
 });

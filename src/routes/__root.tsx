@@ -2,9 +2,9 @@ import { createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 import { StaticFallback } from "#/components/StaticFallback";
 import appCss from "../styles.css?url";
 
-const TITLE = "AdamGoodApp — Adam Rais, Senior Full-Stack Engineer";
+const TITLE = "AdamGoodApp — Senior Full-Stack Engineer";
 const DESCRIPTION =
-	"Adam Rais: frontend-focused full-stack engineer in Tokyo (TypeScript, React, TanStack, three.js, AI/LLM systems). Explore the city to read the CV.";
+	"Adam: frontend-focused full-stack engineer in Tokyo (TypeScript, React, TanStack, three.js, AI/LLM systems). Explore the city to read the CV.";
 
 export const Route = createRootRoute({
 	head: () => ({

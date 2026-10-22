@@ -16,7 +16,7 @@ export function StaticFallback() {
 				>
 					<h1 className="retro text-2xl text-white md:text-4xl">ADAMGOODAPP</h1>
 					<p className="text-white">
-						Adam Rais — Senior Full-Stack Engineer · Tokyo
+						Adam — Senior Full-Stack Engineer · Tokyo
 					</p>
 					<NavButtons layout="center" />
 					<p className="text-white/70 text-xs">

@@ -52,7 +52,7 @@ describe("remote MCP server", () => {
 		});
 		expect(profile.structuredContent).toMatchObject({
 			kind: "profile",
-			name: "Adam Rais",
+			name: "Adam",
 		});
 		const search = await client.callTool({
 			name: "search_cv",

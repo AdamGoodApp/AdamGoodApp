@@ -56,7 +56,7 @@ describe("CvWidget", () => {
 			content: [],
 			structuredContent: { kind: "profile", ...profile() },
 		});
-		expect(screen.getByText("Adam Rais")).toBeTruthy();
+		expect(screen.getByText("Adam")).toBeTruthy();
 		expect(
 			screen.getByRole("link", { name: "GITHUB" }).getAttribute("href"),
 		).toBe("https://github.com/AdamGoodApp");

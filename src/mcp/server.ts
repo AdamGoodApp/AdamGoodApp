@@ -37,7 +37,7 @@ const WIDGET_UI_META = {
 	csp: { resourceDomains: [SITE_URL] },
 };
 
-const INSTRUCTIONS = `Adam Rais's portfolio: his CV as an isometric city at ${SITE_URL}. Use get_profile, list_experience, list_skills, list_projects and search_cv for facts about Adam; get_district_content for a whole CV section; get_site_guide to explain the site. Results render as an interactive card in hosts that support MCP Apps. To drive the 3D city itself, open ${SITE_URL} in a browser with WebMCP.`;
+const INSTRUCTIONS = `Adam's portfolio: his CV as an isometric city at ${SITE_URL}. Use get_profile, list_experience, list_skills, list_projects and search_cv for facts about Adam; get_district_content for a whole CV section; get_site_guide to explain the site. Results render as an interactive card in hosts that support MCP Apps. To drive the 3D city itself, open ${SITE_URL} in a browser with WebMCP.`;
 
 interface DataDefinition<I extends z.ZodObject, O extends z.ZodObject> {
 	name: DataToolName;
@@ -100,7 +100,7 @@ function createCityMcpServer(search: CvSearch): McpServer {
 	const server = new McpServer(
 		{
 			name: "adamgoodapp",
-			title: "Adam Rais — CV city",
+			title: "Adam — CV city",
 			version: "1.0.0",
 			websiteUrl: SITE_URL,
 		},
@@ -124,7 +124,7 @@ function createCityMcpServer(search: CvSearch): McpServer {
 		CV_WIDGET_URI,
 		{
 			description:
-				"Interactive card rendering Adam Rais's profile, CV sections, experience, skills, projects and search results",
+				"Interactive card rendering Adam's profile, CV sections, experience, skills, projects and search results",
 			mimeType: RESOURCE_MIME_TYPE,
 			_meta: { ui: WIDGET_UI_META },
 		},
@@ -144,7 +144,7 @@ function createCityMcpServer(search: CvSearch): McpServer {
 		"profile",
 		"cv://profile",
 		{
-			title: "Adam Rais — profile",
+			title: "Adam — profile",
 			description: "About-me section of the CV",
 			mimeType: "text/markdown",
 		},

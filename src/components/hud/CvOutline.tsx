@@ -6,7 +6,7 @@ import { ZoneContent } from "./ZoneContent";
 export function CvOutline() {
 	return (
 		<main className="sr-only">
-			<h1>Adam Rais — Senior Full-Stack Software Engineer</h1>
+			<h1>Adam — Senior Full-Stack Software Engineer</h1>
 			{ZONES.map((zone) => {
 				const content = CV[zone.id];
 				return (

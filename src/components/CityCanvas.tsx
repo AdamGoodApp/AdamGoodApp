@@ -139,7 +139,7 @@ function Canvas({ worldRef }: { worldRef: RefObject<CityWorld | null> }) {
 	return (
 		<canvas
 			ref={canvasRef}
-			aria-label="Isometric city of Adam Rais's career; use the district buttons to read each section"
+			aria-label="Isometric city of Adam's career; use the district buttons to read each section"
 			className="fixed inset-0 h-full w-full touch-none transition-opacity duration-500"
 			style={{ opacity: ready ? 1 : 0 }}
 		/>

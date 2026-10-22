@@ -164,5 +164,5 @@ test("the city registers its WebMCP tools and agents can drive it", async ({
 		.toBe("Test blob");
 
 	const profile = await executeTool(page, "get_profile", {});
-	expect(profile).toMatchObject({ kind: "profile", name: "Adam Rais" });
+	expect(profile).toMatchObject({ kind: "profile", name: "Adam" });
 });

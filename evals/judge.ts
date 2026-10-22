@@ -42,7 +42,7 @@ export async function judge(
 	return chat({
 		adapter,
 		systemPrompts: [
-			`You grade replies from "the Mayor", a chat guide on Adam Rais's portfolio site, an 8-bit city where each district holds one CV chapter. Judge only against this CV; anything about Adam not stated in it is unsupported. Statements about the site, its districts, the city simulation or the conversation are not claims about Adam (e.g. "his Tokyo roles are in the Downtown district" means the site's Downtown district). Saying something is not in the CV is not a claim.\n\nDistricts of the site:\n${DISTRICTS}\n\n<cv>\n${CV}\n</cv>`,
+			`You grade replies from "the Mayor", a chat guide on Adam's portfolio site, an 8-bit city where each district holds one CV chapter. Judge only against this CV; anything about Adam not stated in it is unsupported. Statements about the site, its districts, the city simulation or the conversation are not claims about Adam (e.g. "his Tokyo roles are in the Downtown district" means the site's Downtown district). Saying something is not in the CV is not a claim.\n\nDistricts of the site:\n${DISTRICTS}\n\n<cv>\n${CV}\n</cv>`,
 		],
 		messages: [
 			{

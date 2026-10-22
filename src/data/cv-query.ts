@@ -95,7 +95,7 @@ function splitDots(value: string, count: number): string[] {
 
 export function profile(): Profile {
 	return {
-		name: "Adam Rais",
+		name: "Adam",
 		title: "Senior Full-Stack Engineer",
 		location: "Tokyo, Japan",
 		summary: blocksOf("beach", "text")[0]?.text ?? "",
@@ -377,7 +377,7 @@ export function siteGuide(): string {
 		.join("\n");
 	return `# adamgoodapp.com — site guide
 
-${SITE_URL} is Adam Rais's CV as a living isometric city: traffic, pedestrians, trains and a day/night cycle run in the browser (three.js WebGPU with a WebGL2 fallback). Each district is one chapter of the CV.
+${SITE_URL} is Adam's CV as a living isometric city: traffic, pedestrians, trains and a day/night cycle run in the browser (three.js WebGPU with a WebGL2 fallback). Each district is one chapter of the CV.
 
 ## How to use it
 
