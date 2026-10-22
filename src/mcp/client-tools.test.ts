@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
+import { DISASTER_PRESETS } from "#/city/disasters/presets";
+import type { EventSpec } from "#/city/disasters/spec";
 import { CityEvents } from "#/city/events";
 import { INITIAL_UI, setUi, uiStore } from "#/store/ui";
 import { CLIENT_TOOLS, NO_CITY } from "./client-tools";
@@ -11,6 +13,7 @@ interface FakeWorld extends CityControls {
 	setSpeed: Mock<CityControls["setSpeed"]>;
 	highlightSpot: Mock<CityControls["highlightSpot"]>;
 	clearSpot: Mock<CityControls["clearSpot"]>;
+	stageCustomEvent: Mock<CityControls["stageCustomEvent"]>;
 	log: CityEvents;
 }
 
@@ -43,6 +46,11 @@ function fakeWorld(): FakeWorld {
 		landmarks: () => log.landmarks(),
 		stageKinds: () => log.stageKinds(),
 		stageEvent: (kind) => log.stage(kind),
+		stageCustomEvent: vi.fn((spec: unknown) => ({
+			ok: true,
+			text: `Staged ${(spec as EventSpec).name}`,
+		})),
+		getDisaster: () => null,
 		highlightSpot: vi.fn(
 			(target: Parameters<CityControls["highlightSpot"]>[0]) =>
 				!("landmark" in target) ||
@@ -230,6 +238,24 @@ describe("city tools", () => {
 		).toMatchObject({
 			ok: false,
 		});
+	});
+
+	it("stage_custom_event hands a validated spec to the city", async () => {
+		const world = fakeWorld();
+		const ctx = makeContext(world);
+		expect(
+			await run("stage_custom_event", DISASTER_PRESETS.tornado, ctx),
+		).toEqual({ ok: true, text: "Staged Tornado" });
+		const spec = world.stageCustomEvent.mock.calls[0]?.[0] as EventSpec;
+		expect(spec.effects[0]?.kind).toBe("crush");
+		expect(spec.motion.waypoints).toHaveLength(4);
+		expect(
+			await run(
+				"stage_custom_event",
+				DISASTER_PRESETS.tsunami,
+				makeContext(null),
+			),
+		).toEqual({ ok: false, error: NO_CITY });
 	});
 
 	it("highlight_spot rings a landmark or a point, and clears", async () => {

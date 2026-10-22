@@ -14,6 +14,8 @@ export const CITY_EVENT_KINDS = [
 	"helicopter_landing",
 	"festival_started",
 	"festival_ended",
+	"disaster_started",
+	"disaster_ended",
 ] as const;
 export type CityEventKind = (typeof CITY_EVENT_KINDS)[number];
 
@@ -22,6 +24,10 @@ export const STAGE_KINDS = [
 	"dispatch_fire_engine",
 	"launch_helicopter",
 	"park_festival",
+	"ufo_attack",
+	"tornado",
+	"black_hole",
+	"tsunami",
 ] as const;
 export type StageKind = (typeof STAGE_KINDS)[number];
 

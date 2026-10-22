@@ -78,6 +78,7 @@ export function ZoneMarkers({
 	const view = useSelector(uiStore, (s) => s.viewVersion);
 	const hovered = useSelector(uiStore, (s) => s.hovered);
 	const selected = useSelector(uiStore, (s) => s.selected);
+	const disaster = useSelector(uiStore, (s) => s.disaster);
 	const [points, setPoints] = useState<
 		Partial<Record<ZoneId, { x: number; y: number }>>
 	>({});
@@ -91,7 +92,7 @@ export function ZoneMarkers({
 		setPoints(next);
 	}, [ready, view, worldRef]);
 
-	if (!ready) return null;
+	if (!ready || disaster?.cityHidden) return null;
 	return (
 		<nav
 			aria-label="Districts"

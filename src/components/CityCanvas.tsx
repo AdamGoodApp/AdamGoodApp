@@ -83,6 +83,7 @@ function Canvas({ worldRef }: { worldRef: RefObject<CityWorld | null> }) {
 				onSelect: (selected) => setUi({ selected, interacted: true }),
 				onReady: () => setUi({ ready: true }),
 				onNightChange: (isNight) => setUi({ isNight }),
+				onDisaster: (disaster) => setUi({ disaster }),
 				onViewChange: () =>
 					setUi({ viewVersion: uiStore.state.viewVersion + 1 }),
 				onFatal: fail,
@@ -111,6 +112,9 @@ function Canvas({ worldRef }: { worldRef: RefObject<CityWorld | null> }) {
 					},
 					get ready() {
 						return uiStore.state.ready;
+					},
+					get disaster() {
+						return w.getDisaster();
 					},
 				};
 			}

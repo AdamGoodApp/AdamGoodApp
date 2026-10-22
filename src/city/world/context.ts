@@ -1,4 +1,5 @@
 import type { BufferGeometry, Group, Vector3 } from "three";
+import type { BuildingRegistry } from "../disasters/buildings";
 import type { CityEvents } from "../events";
 import type { Rng } from "../rng";
 import type { Agent } from "../sim/agent";
@@ -22,6 +23,8 @@ export interface BuildContext {
 	readonly agents: Agent[];
 	/** Event log, stageable events and landmarks the agent tools read. */
 	readonly events: CityEvents;
+	/** Every kit building's lot and merged-mesh vertex ranges, for the disasters. */
+	readonly buildings: BuildingRegistry;
 	/** Pedestrian network: open polylines; endpoints within 2 m are connected. */
 	readonly sidewalks: Polyline[];
 	/** Door positions residents walk out of. */

@@ -1,4 +1,5 @@
 import { Store } from "@tanstack/store";
+import type { DisasterState } from "#/city/disasters/director";
 import type { TimeMode } from "#/city/env";
 import type { ZoneId } from "#/data/zones";
 
@@ -18,6 +19,8 @@ export interface UiState {
 	viewVersion: number;
 	/** Message bubble shown by an agent through the `show_message` / `run_tour` tools. */
 	notice: AgentNoticeState | null;
+	/** The disaster playing in the city (Events menu, stage_event, stage_custom_event), if any. */
+	disaster: DisasterState | null;
 }
 
 export interface AgentNoticeState {
@@ -37,6 +40,7 @@ export const INITIAL_UI: UiState = {
 	isNight: false,
 	viewVersion: 0,
 	notice: null,
+	disaster: null,
 };
 
 export const uiStore = new Store<UiState>({ ...INITIAL_UI });

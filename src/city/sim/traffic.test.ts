@@ -1,5 +1,6 @@
 import { Group, InstancedMesh, Matrix4 } from "three";
 import { describe, expect, it } from "vitest";
+import { BuildingRegistry } from "../disasters/buildings";
 import { CityEvents } from "../events";
 import { mulberry32 } from "../rng";
 import type { BuildContext } from "../world/context";
@@ -30,6 +31,7 @@ function makeContext(density: number, seed: number): BuildContext {
 		group: new Group(),
 		agents: [],
 		events: new CityEvents(),
+		buildings: new BuildingRegistry(),
 		sidewalks: [],
 		residentialDoors: [],
 		residentialLoop: null,

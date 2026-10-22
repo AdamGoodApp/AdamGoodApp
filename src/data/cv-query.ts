@@ -394,7 +394,7 @@ ${rows}
 ## Tools
 
 - City control (in the page, via WebMCP): get_city_state, focus_district, set_view, reset_view, open_district, close_district, highlight_district, highlight_spot, set_time_of_day, control_simulation, show_message, run_tour.
-- City life (in the page): get_city_events (news feed of fires, fire engine runs, buses, helicopter flights, festivals, plus landmarks) and stage_event (fire flare-up, fire engine dispatch, helicopter launch, park festival).
+- City life (in the page): get_city_events (news feed of fires, fire engine runs, buses, helicopter flights, festivals, disasters, plus landmarks) and stage_event (fire flare-up, fire engine dispatch, helicopter launch, park festival, UFO attack, tornado, black hole, tsunami); stage_custom_event runs an event designed from a description (actor parts, motion, effects).
 - CV data (in the page and remotely): get_profile, list_districts, get_district_content, search_cv, list_experience, list_skills, list_projects, get_contact, get_site_guide.
 
 MCP endpoint: ${MCP_URL} (Streamable HTTP; data tools render MCP Apps cards).

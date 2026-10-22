@@ -325,7 +325,7 @@ interface Fighter {
 	phase: number;
 }
 
-function flameGeometry(): BufferGeometry {
+export function flameGeometry(): BufferGeometry {
 	const g = new ConeGeometry(0.5, 1.5, 5).translate(0, 0.75, 0);
 	return glow(
 		paintBy(g, (_x, y) => (y < 0.5 ? 0xff4a10 : y < 1.0 ? 0xff8c1a : 0xffc13a)),

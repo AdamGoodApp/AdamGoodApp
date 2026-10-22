@@ -1,5 +1,6 @@
 import { toolDefinition } from "@tanstack/ai";
 import { z } from "zod";
+import { eventSpecSchema } from "#/city/disasters/spec";
 import { CITY_EVENT_KINDS, STAGE_KINDS } from "#/city/events";
 import {
 	DISTRICT_GUIDE,
@@ -232,8 +233,16 @@ export const getCityEvents = toolDefinition({
 export const stageEvent = toolDefinition({
 	name: "stage_event",
 	description:
-		"Make something happen in the city: fire_flare_up (the suburban house fire flares up), dispatch_fire_engine (the fire engine runs a lap with sirens), launch_helicopter (the medical helicopter takes off from the hospital), park_festival (a dancing crowd fills the central park for a minute).",
+		"Make something happen in the city: fire_flare_up (the suburban house fire flares up), dispatch_fire_engine (the fire engine runs a lap with sirens), launch_helicopter (the medical helicopter takes off from the hospital), park_festival (a dancing crowd fills the central park for a minute), ufo_attack (a flying saucer zaps buildings and sets them ablaze), tornado (a funnel roams the districts flattening buildings into rubble), black_hole (swallows the whole city and leaves black space), tsunami (a wave sweeps in from the sea and submerges the city). Disasters undo themselves about 20 seconds after they end.",
 	inputSchema: z.object({ kind: z.enum(STAGE_KINDS) }),
+	outputSchema: okResult.extend({ text: z.string().optional() }),
+});
+
+export const stageCustomEvent = toolDefinition({
+	name: "stage_custom_event",
+	description:
+		"Invent and run an event the visitor describes that no stage_event kind covers (a giant robot, a meteor, a kaiju, a lava flow). Build the actor from 4–16 chunky parts in flat colours like the city's toys (a car is 4 m long, a house 8 m, towers 40–60 m tall; glow for lights and energy), choose how it moves and 1–3 effects on the buildings. For a UFO, tornado, black hole or tsunami use stage_event instead. The city rebuilds itself about 20 seconds after the event ends.",
+	inputSchema: eventSpecSchema,
 	outputSchema: okResult.extend({ text: z.string().optional() }),
 });
 
@@ -348,6 +357,7 @@ export const CITY_TOOLS = [
 	runTour,
 	getCityEvents,
 	stageEvent,
+	stageCustomEvent,
 	highlightSpot,
 ] as const;
 
@@ -408,6 +418,11 @@ export const TOOL_META: Record<ToolName, ToolMeta> = {
 	run_tour: { title: "Run a guided tour", readOnly: false, widget: false },
 	get_city_events: { title: "City news feed", readOnly: true, widget: false },
 	stage_event: { title: "Stage a city event", readOnly: false, widget: false },
+	stage_custom_event: {
+		title: "Stage a custom event",
+		readOnly: false,
+		widget: false,
+	},
 	highlight_spot: { title: "Highlight a spot", readOnly: false, widget: false },
 	get_profile: { title: "Adam's profile", readOnly: true, widget: true },
 	list_districts: { title: "List districts", readOnly: true, widget: false },

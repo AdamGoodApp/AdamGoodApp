@@ -15,6 +15,8 @@ export type CityControls = Pick<
 	| "landmarks"
 	| "stageKinds"
 	| "stageEvent"
+	| "stageCustomEvent"
+	| "getDisaster"
 	| "highlightSpot"
 	| "clearSpot"
 	| "getSimulation"

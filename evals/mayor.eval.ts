@@ -4,7 +4,12 @@ import { z } from "zod";
 import { createGatewayAdapter, MAYOR_MODEL } from "#/chat/adapter";
 import type { TourAudienceAnswer } from "#/chat/tour";
 import { TOUR_AUDIENCES } from "#/data/tours";
-import { runTour, setTimeOfDay } from "#/mcp/definitions";
+import {
+	runTour,
+	setTimeOfDay,
+	stageCustomEvent,
+	stageEvent,
+} from "#/mcp/definitions";
 import { type CvSearch, createCvSearch } from "#/mcp/semantic-search";
 import { evalCredentials, gatewayEnv, restSearchEnv } from "./cloudflare";
 import { JUDGE_MODEL, judge, type Verdict } from "./judge";
@@ -123,6 +128,37 @@ const CASES: MayorCase[] = [
 				TOUR_AUDIENCES.filter((a) => text.includes(a.label)).length,
 			).toBeLessThan(3);
 		},
+	},
+	{
+		name: "disaster preset",
+		request: "A UFO appears over the city and starts zapping buildings!",
+		check: (t) => {
+			const staged = called(t, "stage_event");
+			expect(staged).toHaveLength(1);
+			expect(stageEvent.inputSchema.parse(staged[0]?.input).kind).toBe(
+				"ufo_attack",
+			);
+			expect(called(t, "stage_custom_event")).toHaveLength(0);
+		},
+		judge: "Says a UFO is attacking the city; no claims about Adam.",
+	},
+	{
+		name: "custom disaster",
+		request:
+			"A giant robot stomps through Downtown, crushing buildings under its feet.",
+		check: (t) => {
+			const staged = called(t, "stage_custom_event");
+			expect(staged).toHaveLength(1);
+			const spec = stageCustomEvent.inputSchema.parse(staged[0]?.input);
+			expect(spec.actor?.parts.length ?? 0).toBeGreaterThanOrEqual(4);
+			expect(spec.effects.map((e) => e.kind)).toContain("crush");
+			expect(spec.motion.waypoints.map((w) => w.district)).toContain(
+				"downtown",
+			);
+			expect(called(t, "stage_event")).toHaveLength(0);
+		},
+		judge:
+			"Describes a robot rampaging through Downtown in one or two sentences; no claims about Adam.",
 	},
 	{
 		name: "fit check",

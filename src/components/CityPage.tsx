@@ -17,6 +17,7 @@ import { MayorChat } from "./chat/MayorChat";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { AgentNotice } from "./hud/AgentNotice";
 import { CvOutline } from "./hud/CvOutline";
+import { EventsMenu } from "./hud/EventsMenu";
 import { HoverLabel } from "./hud/HoverLabel";
 import { NavButtons } from "./hud/NavButtons";
 import { ScrollHint } from "./hud/ScrollHint";
@@ -101,7 +102,10 @@ export function CityPage() {
 					)}
 					{!capture && (
 						<>
-							<TimeButton />
+							<div className="fixed top-5 right-5 z-20 flex gap-4">
+								<EventsMenu worldRef={worldRef} />
+								<TimeButton />
+							</div>
 							<HoverLabel />
 							<AgentNotice />
 							<MayorChat worldRef={worldRef} select={select} hover={hover} />

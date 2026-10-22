@@ -13,7 +13,7 @@ export function TimeButton() {
 	const target = isNight ? "day" : "night";
 	const Icon = isNight ? Moon : Sun;
 	return (
-		<div className="fixed top-5 right-5 z-20 flex gap-4">
+		<div className="flex gap-4">
 			{mode !== "auto" && (
 				<Button
 					font="retro"

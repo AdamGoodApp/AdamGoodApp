@@ -35,5 +35,12 @@ export function describeToolCall(part: {
 	) {
 		return `${base} · ${input.kind}`;
 	}
+	if (
+		part.name === "stage_custom_event" &&
+		"name" in input &&
+		typeof input.name === "string"
+	) {
+		return `${base} · ${input.name}`;
+	}
 	return base;
 }

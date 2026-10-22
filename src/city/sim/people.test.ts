@@ -1,5 +1,6 @@
 import { Group, InstancedMesh, Matrix4, Vector3 } from "three";
 import { describe, expect, it } from "vitest";
+import { BuildingRegistry } from "../disasters/buildings";
 import { CityEvents } from "../events";
 import { mulberry32 } from "../rng";
 import type { BuildContext } from "../world/context";
@@ -16,6 +17,7 @@ function makeContext(density: number): BuildContext {
 		group: new Group(),
 		agents: [],
 		events: new CityEvents(),
+		buildings: new BuildingRegistry(),
 		sidewalks: [
 			new Polyline([new Vector3(-80, y, 26), new Vector3(80, y, 26)], false),
 			new Polyline([new Vector3(26, y, -80), new Vector3(26, y, 80)], false),

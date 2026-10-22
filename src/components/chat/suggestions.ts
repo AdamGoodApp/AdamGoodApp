@@ -1,4 +1,5 @@
 import {
+	Bot,
 	Braces,
 	FileText,
 	GitFork,
@@ -36,6 +37,13 @@ export const MAYOR_SUGGESTIONS: readonly MayorSuggestion[] = [
 		label: "What's happening in the city?",
 		prompt: "What's happening in the city right now?",
 		icon: Newspaper,
+	},
+	{
+		id: "robot",
+		label: "A giant robot stomps through Downtown",
+		prompt:
+			"A giant robot stomps through Downtown, crushing buildings under its feet.",
+		icon: Bot,
 	},
 	{
 		id: "fit",

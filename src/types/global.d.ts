@@ -7,6 +7,11 @@ declare global {
 			cameraTarget(): { x: number; z: number };
 			tier: string;
 			ready: boolean;
+			disaster: {
+				name: string;
+				phase: "running" | "aftermath";
+				cityHidden: boolean;
+			} | null;
 		};
 	}
 }

@@ -17,6 +17,7 @@ const TOOLS = [
 	"run_tour",
 	"get_city_events",
 	"stage_event",
+	"stage_custom_event",
 	"highlight_spot",
 	"get_profile",
 	"list_districts",
@@ -106,6 +107,10 @@ test("the city registers its WebMCP tools and agents can drive it", async ({
 			"dispatch_fire_engine",
 			"launch_helicopter",
 			"park_festival",
+			"ufo_attack",
+			"tornado",
+			"black_hole",
+			"tsunami",
 		]),
 	);
 	expect(
@@ -122,6 +127,41 @@ test("the city registers its WebMCP tools and agents can drive it", async ({
 	expect(
 		await executeTool(page, "highlight_spot", { landmark: "park_bandstand" }),
 	).toEqual({ ok: true });
+
+	// Disasters: a preset through stage_event, then a spec through stage_custom_event.
+	expect(
+		await executeTool(page, "stage_event", { kind: "tornado" }),
+	).toMatchObject({ ok: true });
+	await expect
+		.poll(() => page.evaluate(() => window.__city?.disaster?.name))
+		.toBe("Tornado");
+	const disasters = await executeTool(page, "get_city_events", {
+		since: Number(feed.lastId),
+	});
+	expect(disasters.events).toEqual(
+		expect.arrayContaining([
+			expect.objectContaining({ kind: "disaster_started" }),
+		]),
+	);
+	expect(
+		await executeTool(page, "stage_custom_event", {
+			name: "Test blob",
+			announcement: "A blob lands on {where}",
+			actor: {
+				parts: [{ shape: "sphere", size: [3, 0, 0], color: "#ff00ff" }],
+			},
+			motion: {
+				kind: "hover",
+				waypoints: [{ district: "beach" }],
+				altitude: 10,
+			},
+			effects: [{ kind: "burn", radius: 10 }],
+			seconds: 5,
+		}),
+	).toMatchObject({ ok: true });
+	await expect
+		.poll(() => page.evaluate(() => window.__city?.disaster?.name))
+		.toBe("Test blob");
 
 	const profile = await executeTool(page, "get_profile", {});
 	expect(profile).toMatchObject({ kind: "profile", name: "Adam Rais" });

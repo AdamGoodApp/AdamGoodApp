@@ -1,4 +1,5 @@
 import type { BufferGeometry } from "three";
+import type { BuildingRegistry } from "../disasters/buildings";
 import { box, cone, cyl, GLOW, glow, merge, place, prism } from "../geometry";
 import { BRIGHTS, darken, WHITE } from "../palette";
 import type { Rng } from "../rng";
@@ -16,6 +17,8 @@ export interface Sink {
 	readonly rng: Rng;
 	readonly statics: BufferGeometry[];
 	readonly facades: BufferGeometry[];
+	/** Records each building's lot and geometries so disasters can find it after the merge. */
+	readonly buildings?: BuildingRegistry;
 }
 
 export interface Lot {
@@ -40,8 +43,19 @@ function emit(
 	facades: BufferGeometry[],
 ): void {
 	const t = { x: lot.x, z: lot.z, ry: lot.ry ?? 0 };
-	if (statics.length) sink.statics.push(place(merge(statics), t));
-	if (facades.length) sink.facades.push(...facades.map((f) => place(f, t)));
+	const g = statics.length ? place(merge(statics), t) : null;
+	if (g) sink.statics.push(g);
+	const fs = facades.map((f) => place(f, t));
+	sink.facades.push(...fs);
+	sink.buildings?.add({
+		x: lot.x,
+		z: lot.z,
+		w: lot.w,
+		d: lot.d,
+		ry: lot.ry ?? 0,
+		statics: g,
+		facades: fs,
+	});
 }
 
 /** Flat roof with parapet/cornice at height h. */

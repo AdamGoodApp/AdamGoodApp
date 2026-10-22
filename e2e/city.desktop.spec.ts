@@ -68,4 +68,12 @@ test("keyboard users reach every district through the light bulbs", async ({
 	await expect(links).toHaveCount(5);
 	for (const link of await links.all())
 		await expect(link).toHaveAttribute("target", "_blank");
+	await page.keyboard.press("Escape");
+
+	await page.getByTestId("events-menu").click();
+	await page.getByRole("menuitem", { name: "Tornado" }).click();
+	await expect(page.getByTestId("events-menu")).toContainText("TORNADO");
+	await expect
+		.poll(() => page.evaluate(() => window.__city?.disaster?.phase))
+		.toBe("running");
 });

@@ -66,10 +66,17 @@ function cityResult(name: string): unknown {
 					"dispatch_fire_engine",
 					"launch_helicopter",
 					"park_festival",
+					"ufo_attack",
+					"tornado",
+					"black_hole",
+					"tsunami",
 				],
 			};
 		case "run_tour":
 			return { ok: true, stops: 5 };
+		case "stage_event":
+		case "stage_custom_event":
+			return { ok: true, text: "Staged" };
 		default:
 			return { ok: true };
 	}

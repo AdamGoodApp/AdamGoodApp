@@ -31,6 +31,7 @@ import {
 	setTimeOfDay,
 	setView,
 	showMessage,
+	stageCustomEvent,
 	stageEvent,
 	TOOL_META,
 } from "./definitions";
@@ -233,6 +234,15 @@ export const CITY_CLIENT_TOOLS = [
 		const w = world(ctx);
 		if (!w) return noCity;
 		const result = w.stageEvent(kind);
+		return result.ok
+			? { ok: true, text: result.text }
+			: { ok: false, error: result.text };
+	}),
+
+	stageCustomEvent.client<CityToolContext>((spec, ctx) => {
+		const w = world(ctx);
+		if (!w) return noCity;
+		const result = w.stageCustomEvent(spec);
 		return result.ok
 			? { ok: true, text: result.text }
 			: { ok: false, error: result.text };

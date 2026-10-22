@@ -1,4 +1,7 @@
 import { Group, Material, Mesh, Texture } from "three";
+import { BuildingRegistry } from "../disasters/buildings";
+import { DisasterDirector } from "../disasters/director";
+import { DISASTER_KINDS, DISASTER_PRESETS } from "../disasters/presets";
 import { CityEvents } from "../events";
 import { MAT_STATIC, merge } from "../geometry";
 import { facadeMaterial } from "../kit/facade";
@@ -30,8 +33,11 @@ import { buildThemePark } from "./themepark";
 
 export interface BuiltWorld {
 	group: Group;
+	/** Effects that stay put while the island itself is animated (disasters). */
+	fx: Group;
 	agents: Agent[];
 	events: CityEvents;
+	disasters: DisasterDirector;
 	dispose(): void;
 }
 
@@ -45,6 +51,7 @@ export function buildWorld(rng: Rng, density: number): BuiltWorld {
 		group,
 		agents: [],
 		events: new CityEvents(),
+		buildings: new BuildingRegistry(),
 		sidewalks: [],
 		residentialDoors: [],
 		residentialLoop: null,
@@ -77,31 +84,55 @@ export function buildWorld(rng: Rng, density: number): BuiltWorld {
 	createSkyTraffic(ctx);
 	createOutskirtTraffic(ctx);
 
+	// Vertex ranges must be taken before merge() disposes the inputs.
+	const index = ctx.buildings.resolve(ctx.statics, ctx.facades);
 	const staticMesh = new Mesh(merge(ctx.statics), MAT_STATIC);
 	staticMesh.castShadow = true;
 	staticMesh.receiveShadow = true;
 	group.add(staticMesh);
+	let facadesMesh: Mesh | null = null;
 	if (ctx.facades.length > 0) {
-		const facades = new Mesh(merge(ctx.facades), facadeMaterial());
-		facades.castShadow = true;
-		facades.receiveShadow = true;
-		group.add(facades);
+		facadesMesh = new Mesh(merge(ctx.facades), facadeMaterial());
+		facadesMesh.castShadow = true;
+		facadesMesh.receiveShadow = true;
+		group.add(facadesMesh);
 	}
 
+	const fx = new Group();
+	const disasters = new DisasterDirector({
+		group,
+		fx,
+		events: ctx.events,
+		index,
+		statics: staticMesh,
+		facades: facadesMesh,
+		rng: ctx.rng,
+		density,
+	});
+	ctx.agents.push(disasters);
+	for (const kind of DISASTER_KINDS) {
+		ctx.events.onStage(kind, () => disasters.start(DISASTER_PRESETS[kind]));
+	}
+
+	const disposeMeshes = (root: Group) =>
+		root.traverse((o) => {
+			if (o instanceof Mesh) {
+				o.geometry.dispose();
+				if (o.material instanceof Material && o.material !== MAT_STATIC) {
+					const map = "map" in o.material ? o.material.map : null;
+					if (map instanceof Texture) map.dispose();
+				}
+			}
+		});
 	return {
 		group,
+		fx,
 		agents: ctx.agents,
 		events: ctx.events,
+		disasters,
 		dispose() {
-			group.traverse((o) => {
-				if (o instanceof Mesh) {
-					o.geometry.dispose();
-					if (o.material instanceof Material && o.material !== MAT_STATIC) {
-						const map = "map" in o.material ? o.material.map : null;
-						if (map instanceof Texture) map.dispose();
-					}
-				}
-			});
+			disposeMeshes(group);
+			disposeMeshes(fx);
 		},
 	};
 }

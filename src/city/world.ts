@@ -1,10 +1,19 @@
 import { DirectionalLight, HemisphereLight, Scene, Vector3 } from "three";
-import { mix, screenUV } from "three/tsl";
+import { mix, screenUV, vec3 } from "three/tsl";
 import type { RenderPipeline, WebGPURenderer } from "three/webgpu";
 import { ZONE_BY_ID, type ZoneId } from "#/data/zones";
 import type { CameraMode } from "./camera";
 import { IsoCamera } from "./camera";
-import { DayNight, simClock, skyBottom, skyTop, type TimeMode } from "./env";
+import type { DisasterState } from "./disasters/director";
+import { isDisasterKind } from "./disasters/presets";
+import {
+	DayNight,
+	simClock,
+	skyBottom,
+	skyTop,
+	type TimeMode,
+	voidMix,
+} from "./env";
 import type { CityEvent, Landmark, StageKind, StageResult } from "./events";
 import { ZoneHighlights } from "./highlight";
 import { PointerController } from "./input";
@@ -31,6 +40,8 @@ export interface CityWorldOptions {
 	onSelect(id: ZoneId | null): void;
 	onReady(): void;
 	onNightChange(isNight: boolean): void;
+	/** A disaster started, changed phase or ended (null). */
+	onDisaster(state: DisasterState | null): void;
 	/** The camera moved, zoomed or the canvas resized: screen positions changed. */
 	onViewChange(): void;
 	onFatal(err: unknown): void;
@@ -138,7 +149,12 @@ export class CityWorld {
 		this.dayNight = new DayNight(sun, hemi, (n) => o.onNightChange(n));
 		this.dayNight.setMode(o.timeMode);
 		// screenUV.y grows downward: horizon colour at the bottom, zenith at the top.
-		this.scene.backgroundNode = mix(skyTop, skyBottom, screenUV.y);
+		// A black hole fades the sky to black space through voidMix.
+		this.scene.backgroundNode = mix(
+			mix(skyTop, skyBottom, screenUV.y),
+			vec3(0, 0, 0),
+			voidMix,
+		);
 
 		this.camera = new IsoCamera(o.mode);
 		this.pipeline = createPipeline(renderer, this.scene, this.camera.camera, {
@@ -149,7 +165,14 @@ export class CityWorld {
 		this.spot = new SpotHighlight(this.scene);
 
 		this.built = buildWorld(mulberry32(WORLD_SEED), o.density);
-		this.scene.add(this.built.group);
+		this.scene.add(this.built.group, this.built.fx);
+		this.built.disasters.onChange = (s) => {
+			if (s?.cityHidden) {
+				this.hover(null);
+				this.select(null);
+			}
+			o.onDisaster(s);
+		};
 		this.agents = this.built.agents;
 		// Place every agent once so the first (and, with reduced motion, only) frame is populated.
 		for (const a of this.agents) a.update(0, 0);
@@ -282,18 +305,20 @@ export class CityWorld {
 	}
 
 	select(id: ZoneId | null): void {
-		this.selected = id;
-		this.highlights.setSelected(id);
+		const next = this.built.disasters.state()?.cityHidden ? null : id;
+		this.selected = next;
+		this.highlights.setSelected(next);
 		this.dirty = true;
-		this.o.onSelect(id);
+		this.o.onSelect(next);
 	}
 
 	hover(id: ZoneId | null): void {
-		if (id === this.hovered) return;
-		this.hovered = id;
-		this.highlights.setHover(id);
+		const next = this.built.disasters.state()?.cityHidden ? null : id;
+		if (next === this.hovered) return;
+		this.hovered = next;
+		this.highlights.setHover(next);
 		this.dirty = true;
-		this.o.onHover(id);
+		this.o.onHover(next);
 	}
 
 	zoneScreenPoint(id: ZoneId): { x: number; y: number } {
@@ -384,6 +409,23 @@ export class CityWorld {
 	stageEvent(kind: StageKind): StageResult {
 		const result = this.built.events.stage(kind);
 		this.dirty = true;
+		if (result.ok && isDisasterKind(kind)) this.showDisaster();
+		return this.noteIfPaused(result);
+	}
+
+	/** Run an event designed from a spec (see disasters/spec.ts); the city restores itself afterwards. */
+	stageCustomEvent(spec: unknown): StageResult {
+		const result = this.built.disasters.start(spec);
+		this.dirty = true;
+		if (result.ok) this.showDisaster();
+		return this.noteIfPaused(result);
+	}
+
+	getDisaster(): DisasterState | null {
+		return this.built.disasters.state();
+	}
+
+	private noteIfPaused(result: StageResult): StageResult {
 		if (result.ok && this.paused) {
 			return {
 				ok: true,
@@ -391,6 +433,14 @@ export class CityWorld {
 			};
 		}
 		return result;
+	}
+
+	/** Clear the HUD's focus and fly the camera to where the event starts. */
+	private showDisaster(): void {
+		this.select(null);
+		this.spot.clear();
+		const f = this.built.disasters.focus();
+		if (f) this.flyTo(f.x, f.z, f.zoom, 1200);
 	}
 
 	/** Ring a ground point or a landmark (by id) for `seconds` (0 = until cleared). */

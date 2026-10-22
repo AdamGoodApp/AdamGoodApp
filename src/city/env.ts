@@ -14,6 +14,8 @@ export const night = uniform(0);
 export const skyTop = uniform(new Color());
 export const skyBottom = uniform(new Color());
 export const bloomStrength = uniform(0);
+/** 0 = the sky, 1 = black space (a black hole has swallowed the city). */
+export const voidMix = uniform(0);
 
 /** Seconds for one full day in auto mode. */
 const DAY_LENGTH = 180;
