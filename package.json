@@ -90,7 +90,7 @@
 		"lefthook": "^2.2.2",
 		"shadcn": "^4.22.1",
 		"tailwindcss": "^4.3.3",
-		"typescript": "^6.0.3",
+		"typescript": "^7.0.2",
 		"vite": "^8.3.4",
 		"vite-plugin-singlefile": "^2.3.4",
 		"vitest": "^5.0.5",
